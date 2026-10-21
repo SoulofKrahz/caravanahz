@@ -29,9 +29,9 @@ a(Math.abs(c2.avg-10)<1e-9 && Math.abs(c2.eur100-15)<1e-9,'€/100 km incluye el
 const fs=L.fuelStats(E2,'2026-01-01','2026-12-31');
 a(fs.eur===165 && fs.litros===110 && Math.abs(fs.avgPrice-1.5)<1e-9,'resumen de repostajes');
 const Dk={odo:[{fecha:'2025-12-20',km:900,id:'x'},{fecha:'2026-03-01',km:2500,id:'y'}],expenses:[],services:[],trips:[],kv:{}};
-a(L.kmBetween(Dk,'2026-01-01','2026-12-31')===1352,'km del año: los km del 20 al 31 de diciembre cuentan para 2025 (interpolación)');
+a(L.kmBetween(Dk,'2026-01-01','2026-12-31')===1349,'km del año: los km del 20 al 31 de diciembre cuentan para 2025 (interpolación)');
 const Di={odo:[{fecha:'2026-08-10',km:143900},{fecha:'2026-09-19',km:144700}],expenses:[],services:[],trips:[],kv:{}};
-a(L.kmBetween(Di,'2026-08-01','2026-08-31')===420 && L.kmBetween(Di,'2026-09-01','2026-09-30')===380,'km repartidos por días entre agosto y septiembre');
+a(L.kmBetween(Di,'2026-08-01','2026-08-31')===431 && L.kmBetween(Di,'2026-09-01','2026-09-30')===369 && L.kmBetween(Di,'2026-08-01','2026-09-30')===800,'km repartidos por días entre agosto y septiembre');
 a(L.kmBetween(Di,'2025-01-01','2025-12-31')===null,'sin datos que cubran el periodo: null, no 0');
 const V = await import('../site/js/valid.js');
 a(V.parseNum('1,459')===1.459 && V.parseNum('145.000',true)===145000 && Number.isNaN(V.parseNum('3,5',true)) && V.parseNum('1.234,5')===1234.5,'números con coma y puntos de miles');
@@ -52,3 +52,11 @@ a(L.nightsIn([{inicio:'2026-07-12',fin:'2026-07-26'},{inicio:'2026-12-28',fin:'2
 a(Math.round(L.delta(120,100))===20 && L.delta(5,0)===null,'variación porcentual');
 const fc=L.maintForecast([{t:{id:'x'},s:{state:'over',when:'2026-01-01'}},{t:{id:'y'},s:{state:'ok',when:'2027-03-01'}},{t:{id:'z'},s:{state:'ok',when:'2028-01-01'}}],[{tareaId:'x',fecha:'2025-01-01',coste:145}],'2026-10-21',12);
 a(fc.items.length===2 && fc.known===145 && fc.unknown===1,'previsión de mantenimiento a 12 meses');
+// 2026-10-21-1: lecturas el mismo día, viajes hechos y datos incompatibles
+const Ds={odo:[{fecha:'2026-10-21',km:1000,id:'s',aprox:true}],expenses:[],services:[],kv:{},trips:[{id:'t',inicio:'2026-10-21',fin:'2026-10-21',kmIni:1000,kmFin:2000}]};
+a(L.kmBetween(Ds,'2026-01-01','2026-12-31')===1000,'viaje de ida y vuelta en el mismo día cuenta sus 1.000 km');
+a(L.kmBetween(Ds,'2026-10-21','2026-10-21')===1000,'km del día con salida y llegada el mismo día');
+a(L.tripDone({kmFin:2000,fin:'2026-10-21'},'2026-10-21') && !L.tripDone({fin:'2026-10-21'},'2026-10-21') && L.tripDone({fin:'2026-10-20'},'2026-10-21'),'viaje con km de vuelta = hecho aunque la vuelta sea hoy');
+const Dx={odo:[{fecha:'2026-10-21',km:145000,id:'s',aprox:true}],expenses:[],services:[],trips:[],kv:{}};
+a(L.kmCheck(Dx,'2026-10-10',1000) && L.kmCheck(Dx,'2026-10-10',1000).tipo==='salto','1.000 km hace 11 días con una autocaravana que hoy marca 145.000: rechazado');
+a(L.kmCheck(Dx,'2026-09-21',141000)===null,'lectura real anterior a la configuración (141.000 hace un mes): aceptada');

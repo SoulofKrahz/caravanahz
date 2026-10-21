@@ -2,7 +2,7 @@ import { D, getKV, setKV } from '../db.js';
 import { esc, icon, fKm, fEur, fEur0, fNum, fDate, rel, stChip, toast } from '../ui.js';
 import { ctx, tasksWithStatus, docsWithStatus, vehicle, seedPlan, ZONA_ICO, prefs, needsProfilePlan, applyProfilePlan } from '../store.js';
 import { PERFIL } from '../perfil.js';
-import { consumption, kmBetween, isoToday, daysBetween } from '../logic.js';
+import { consumption, kmBetween, isoToday, daysBetween, tripDone } from '../logic.js';
 import { odoSheet, expenseSheet, serviceSheet, docSheet, vehicleSheet } from '../forms.js';
 import { taskDetail, pickTask } from './mant.js';
 import { tripKmSheet } from './viajes.js';
@@ -26,8 +26,8 @@ export function render(view) {
   const gY = D.expenses.filter(e => e.fecha && e.fecha.startsWith(year)).reduce((s, e) => s + (+e.importe || 0), 0);
   const kmY = kmInYear(year), cons = consumption(D.expenses), fuelY = D.expenses.filter(e => e.cat === 'Combustible' && (e.fecha || '').startsWith(year)).reduce((a, e) => a + (+e.importe || 0), 0);
   const today = isoToday();
-  const next = D.trips.filter(t => (t.fin || t.inicio) >= today).sort((a, b) => (a.inicio || '').localeCompare(b.inicio || ''))[0];
-  const last = D.trips.filter(t => (t.fin || t.inicio) < today).sort((a, b) => (b.inicio || '').localeCompare(a.inicio || ''))[0];
+  const next = D.trips.filter(t => !tripDone(t, today)).sort((a, b) => (a.inicio || '').localeCompare(b.inicio || ''))[0];
+  const last = D.trips.filter(t => tripDone(t, today)).sort((a, b) => (b.inicio || '').localeCompare(a.inicio || ''))[0];
 
   // Pedir los km reales justo cuando tocan: al salir y al volver
   const kmAsk = (() => {

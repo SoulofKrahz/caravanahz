@@ -70,6 +70,22 @@ async function run(browser, label, viewport, mobile) {
   await p.fill('.sheet [name=fin]', '2030-06-15'); await save(); await p.waitForTimeout(1200);
   ok(p.url().includes('#/viaje/'), 'viaje creado y editor abierto (sin mapa: sin red)');
 
+  // 4b) Viaje de hoy con km de salida y vuelta: queda en «Hechos» y sus km cuentan en Estadísticas
+  await p.goto(BASE + '#/viajes'); await p.waitForTimeout(300);
+  await p.click('#add'); await p.waitForTimeout(300);
+  await p.fill('.sheet [name=nombre]', 'Escapada de hoy'); await p.fill('.sheet [name=inicio]', iso(today)); await save(); await p.waitForTimeout(1200);
+  await p.click('#kmr [data-km=ini]'); await p.waitForTimeout(300);
+  ok((await p.inputValue('.sheet [name=km]')) !== '', 'km de salida rellenados con el último dato');
+  await save();
+  await p.click('#kmr [data-km=fin]'); await p.waitForTimeout(300);
+  await p.fill('.sheet [name=km]', '146.150'); await save();
+  ok((await p.innerText('#kmr')).includes('350 km recorridos'), 'viaje cerrado: 350 km recorridos');
+  await p.goto(BASE + '#/viajes'); await p.waitForTimeout(300);
+  const lista = await p.innerText('#view');
+  ok(lista.indexOf('Escapada de hoy') > lista.indexOf('Hechos') && lista.includes('Hechos'), 'con km de vuelta, el viaje aparece en «Hechos» y no en «Próximos»');
+  await p.goto(BASE + '#/stats'); await p.waitForTimeout(400);
+  ok((await p.innerText('.kpis')).replace(/\u00a0/g, ' ').includes('850 km'), 'Estadísticas cuenta los km del día (repostajes + viaje de hoy: 850 km)');
+
   // 5) Mantenimiento hecho desde el botón + (móvil) o desde Inicio
   await p.goto(BASE + '#/inicio'); await p.waitForTimeout(300);
   if (mobile) { await p.click('#fab'); await p.waitForTimeout(300); await p.click('.qa button >> nth=2'); }

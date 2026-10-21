@@ -3,7 +3,7 @@ import { D, put, del, uid } from '../db.js';
 import { $, esc, icon, fKm, fDate, fDur, fEur, fNum, fPpl, rel, sheet, form, toast, undo } from '../ui.js';
 import { onSubmit, normKey, normText, R } from '../valid.js';
 import { STOP_TIPOS, NIGHT, prefs, vehicle } from '../store.js';
-import { isoToday, haversine, consumption, lastFuelPrice, daysBetween, addMonths, currentKm, tripCost, eur100Of } from '../logic.js';
+import { isoToday, haversine, consumption, lastFuelPrice, daysBetween, addMonths, currentKm, tripCost, eur100Of, tripDone } from '../logic.js';
 import { expenseSheet, kmMsg } from '../forms.js';
 import { go, refresh } from '../router.js';
 
@@ -11,14 +11,14 @@ import { go, refresh } from '../router.js';
 export function render(view, params) {
   const today = isoToday();
   const all = D.trips.slice().sort((a, b) => (b.inicio || '').localeCompare(a.inicio || ''));
-  const up = all.filter(t => (t.fin || t.inicio || '9999') >= today).reverse(), past = all.filter(t => (t.fin || t.inicio || '9999') < today);
+  const up = all.filter(t => !tripDone(t, today)).reverse(), past = all.filter(t => tripDone(t, today));
   const e100 = eur100Of(D.expenses), kmOf = t => (t.kmIni && t.kmFin ? t.kmFin - t.kmIni : +t.kmRuta || 0);
   const kmTot = past.reduce((s, t) => s + kmOf(t), 0), nights = past.reduce((s, t) => s + nightsOf(t), 0);
   const pl = (n, a, b) => `${n} ${n === 1 ? a : b}`;
   const row = t => { const n = nightsOf(t), tc = tripCost(t, D, e100), real = t.kmIni && t.kmFin;
     return `<a class="row" href="#/viaje/${t.id}"><span class="ico">${icon('map')}</span><span class="m"><b>${esc(t.nombre)}</b>
       <small>${t.inicio ? fDate(t.inicio) + (t.inicio > today ? ' (' + rel(t.inicio) + ')' : '') : 'Sin fecha'} · ${kmOf(t) ? fKm(kmOf(t)) + (real ? '' : ' previstos') : pl((t.paradas || []).length, 'parada', 'paradas')}${n ? ' · ' + pl(n, 'noche', 'noches') : ''}</small></span>
-      <span class="r">${tc.total && (t.fin || t.inicio) < today ? `<b>${fEur(tc.total)}</b>${tc.estimated ? '<small>coste ≈</small>' : ''}` : ''}</span></a>`; };
+      <span class="r">${tc.total && tripDone(t, today) ? `<b>${fEur(tc.total)}</b>${tc.estimated ? '<small>coste ≈</small>' : ''}` : ''}</span></a>`; };
 
   view.innerHTML = `<div class="vh"><div><h1>Viajes</h1><p>${past.length ? `${pl(past.length, 'viaje hecho', 'viajes hechos')} · ${fKm(kmTot)} · ${pl(nights, 'noche', 'noches')}` : up.length ? pl(up.length, 'viaje planificado', 'viajes planificados') : 'Ningún viaje todavía'}</p></div><button class="btn" id="add">${icon('plus')}Viaje</button></div>
     ${!all.length ? `<div class="empty"><h3>Planifica tu primer viaje</h3><p>Marca la salida, las paradas y dónde duermes. Te calculo los kilómetros, el tiempo y lo que gastarás en gasóleo.</p><button class="btn" id="add2">${icon('plus')}Nuevo viaje</button></div>` : ''}

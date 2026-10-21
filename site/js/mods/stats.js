@@ -4,7 +4,7 @@ import { esc, icon, fKm, fDate, fEur, fEur0, fNum, fPpl } from '../ui.js';
 import { ctx, tasksWithStatus, NIGHT, ZONA_ICO } from '../store.js';
 import {
   isoToday, addMonths, kmBetween, consumption, fuelStats, tripCost, eur100Of,
-  GRUPOS, monthsBetween, costBreakdown, series, nightsIn, maintForecast, delta,
+  GRUPOS, monthsBetween, tripDone, costBreakdown, series, nightsIn, maintForecast, delta,
 } from '../logic.js';
 
 let periodo = 'anio', year = String(new Date().getFullYear());
@@ -62,7 +62,7 @@ export function render(view) {
   const cb = costBreakdown(D.expenses, r.from, r.to);
   const km = kmBetween(D, r.from, r.to) || 0, months = monthsIn(r.from, r.to);
   const nights = nightsIn(D.trips, r.from, r.to, NIGHT);
-  const tripsIn = D.trips.filter(t => t.inicio && t.inicio >= r.from && t.inicio <= r.to && (t.fin || t.inicio) <= today);
+  const tripsIn = D.trips.filter(t => t.inicio && t.inicio >= r.from && t.inicio <= r.to && tripDone(t, today));
   const e100all = eur100Of(D.expenses);
 
   // Serie temporal: por mes (hasta 24 meses) o por año

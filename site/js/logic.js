@@ -51,7 +51,9 @@ export function kmCheck(D, fecha, km, ignoreId) {
   km = +km; if (!km || !fecha) return null;
   const c = kmConflict(D, fecha, km, ignoreId);
   if (c) return { tipo: 'baja', ref: c };
-  const p = kmPoints(D).filter(x => x.id !== ignoreId && !(x.aprox && x.fecha > fecha));
+  // Para los saltos imposibles sí cuentan los km aproximados de la configuración: 1.000 km hace una semana
+  // con una autocaravana que hoy marca 145.000 no es un dato del cuentakilómetros
+  const p = kmPoints(D).filter(x => x.id !== ignoreId);
   const prev = p.filter(x => x.fecha <= fecha).pop(), next = p.find(x => x.fecha > fecha);
   for (const r of [prev, next].filter(Boolean)) {
     const dias = Math.max(1, Math.abs(daysBetween(r.fecha, fecha)));
@@ -61,35 +63,45 @@ export function kmCheck(D, fecha, km, ignoreId) {
 }
 
 /**
- * Lectura del cuentakilómetros en una fecha, interpolando entre los datos conocidos.
- * Los km entre dos lecturas se reparten por días: si repostas el 10 de agosto y el 18 de septiembre,
- * los km de ese tramo se cuentan en parte en agosto y en parte en septiembre (antes caían todos en septiembre).
- * Fuera del rango de datos no se inventa nada: antes del primero vale el primero, después del último, el último.
+ * Curva del cuentakilómetros: un punto por día con la lectura más baja (lo) y la más alta (hi) de ese día,
+ * nunca decreciente. Guardar las dos importa: si sales y vuelves el mismo día (o configuras la autocaravana
+ * y haces un viaje ese día), los km del día son hi − lo; con una sola lectura por día salían 0.
  */
-export function odoAt(D, iso, pts = null) {
-  pts = pts || odoCurve(D);
-  if (!pts.length) return null;
-  if (iso <= pts[0].fecha) return pts[0].km;
-  const last = pts[pts.length - 1];
-  if (iso >= last.fecha) return last.km;
-  let i = 1; while (pts[i].fecha < iso) i++;
-  const a = pts[i - 1], b = pts[i], span = daysBetween(a.fecha, b.fecha) || 1;
-  return a.km + (b.km - a.km) * daysBetween(a.fecha, iso) / span;
-}
-/** Una lectura por día (la mayor) y nunca decreciente */
 export function odoCurve(D) {
-  const byDay = {}; kmPoints(D).forEach(p => (byDay[p.fecha] = Math.max(byDay[p.fecha] || 0, p.km)));
+  const day = {};
+  kmPoints(D).forEach(p => { const d = day[p.fecha] || (day[p.fecha] = { lo: Infinity, hi: 0 }); d.lo = Math.min(d.lo, p.km); d.hi = Math.max(d.hi, p.km); });
   let mx = 0;
-  return Object.keys(byDay).sort().map(f => ({ fecha: f, km: (mx = Math.max(mx, byDay[f])) }));
+  return Object.keys(day).sort().map(f => { const lo = Math.max(mx, day[f].lo), hi = Math.max(lo, day[f].hi); mx = hi; return { fecha: f, lo, hi }; });
 }
+
+/**
+ * Lectura al EMPEZAR el día `iso`, interpolando entre los datos conocidos.
+ * Entre dos lecturas, los km se reparten por días (si repostas el 10 de agosto y el 18 de septiembre,
+ * una parte cae en agosto y otra en septiembre). Fuera del rango de datos no se inventa nada.
+ */
+export function odoStart(pts, iso) {
+  if (!pts.length) return null;
+  let i = 0; while (i < pts.length && pts[i].fecha < iso) i++;
+  if (i < pts.length && pts[i].fecha === iso) return pts[i].lo;
+  if (i === 0) return pts[0].lo;
+  if (i === pts.length) return pts[i - 1].hi;
+  const a = pts[i - 1], b = pts[i], aEnd = addDays(a.fecha, 1);
+  const span = daysBetween(aEnd, b.fecha);
+  return span > 0 ? a.hi + (b.lo - a.hi) * daysBetween(aEnd, iso) / span : a.hi;
+}
+/** Lectura al terminar el día `iso` */
+export const odoAt = (D, iso, pts = null) => odoStart(pts || odoCurve(D), addDays(iso, 1));
 
 /** Km recorridos entre dos fechas (incluidas). null si no hay datos que cubran el periodo. */
 export function kmBetween(D, from = '', to = '9999-12-31') {
   const pts = odoCurve(D); if (!pts.length) return null;
   if (to < pts[0].fecha || (from && from > pts[pts.length - 1].fecha)) return null;
-  const start = from ? odoAt(D, addDays(from, -1), pts) : pts[0].km;
-  return Math.max(0, Math.round(odoAt(D, to, pts) - start));
+  const start = from ? odoStart(pts, from) : pts[0].lo, end = to >= '9999' ? pts[pts.length - 1].hi : odoStart(pts, addDays(to, 1));
+  return Math.max(0, Math.round(end - start));
 }
+
+/** Un viaje está hecho cuando ya has apuntado los km de vuelta o su fecha de vuelta ya pasó */
+export const tripDone = (t, today = isoToday()) => !!t.kmFin || (!!(t.fin || t.inicio) && (t.fin || t.inicio) < today);
 
 /** Kilometraje actual: el mayor de todos los registrados */
 export function currentKm(D) {

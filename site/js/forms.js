@@ -18,6 +18,7 @@ export function kmMsg(fecha, km, ignoreId) {
   if (c.tipo === 'baja') return c.ref.fecha <= fecha
     ? `El cuentakilómetros no puede bajar: el ${fDate(c.ref.fecha)} ya marcaba ${fKm(c.ref.km)}`
     : `No cuadra: el ${fDate(c.ref.fecha)}, después de esta fecha, marcaba solo ${fKm(c.ref.km)}`;
+  if (c.ref.aprox) return `No cuadra con tu cuentakilómetros: al configurar la autocaravana el ${fDate(c.ref.fecha)} pusiste ${fKm(c.ref.km)}. Si eran aproximados, corrígelos en Ajustes → Vehículo.`;
   return `Son ${fKm(Math.abs(km - c.ref.km))} en ${c.dias} ${c.dias === 1 ? 'día' : 'días'} respecto al ${fDate(c.ref.fecha)} (${fKm(c.ref.km)}). ¿Sobra o falta una cifra?`;
 }
 /** Fecha válida para registros del vehículo: no futura y no anterior a su matriculación */
