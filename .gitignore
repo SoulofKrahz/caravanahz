@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+.wrangler/
+site/version.txt
+package-lock.json
+tests/capturas/
+__pycache__/

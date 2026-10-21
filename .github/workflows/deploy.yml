@@ -1,0 +1,57 @@
+# Prueba la app y, si todo va bien, publica la carpeta site/ en Cloudflare Pages (rama main).
+# Secretos en GitHub (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN  (token con permiso Account → Cloudflare Pages → Edit)
+#   CLOUDFLARE_ACCOUNT_ID (ID de la cuenta de Cloudflare donde vive Caravanahz)
+# Variable (pestaña Variables): CF_PROJECT = nombre del proyecto de Pages (caravanahz).
+# Si el proyecto no existe en esa cuenta, se crea solo en la primera publicación.
+name: Publicar en Cloudflare Pages
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', 'tests/**', '.github/workflows/deploy.yml']
+  workflow_dispatch:
+concurrency:
+  group: publicar
+  cancel-in-progress: false
+jobs:
+  test:
+    name: Prueba de humo
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Pruebas de lógica (fechas, km, consumo, costes)
+        run: node tests/logica.test.mjs | tee /tmp/logica.txt && ! grep -q '^FALLA' /tmp/logica.txt
+      - name: Instalar Playwright y Chromium
+        run: npm i --no-save --no-audit --no-fund playwright@1.55.0 && npx playwright install --with-deps chromium
+      - name: Probar la app (móvil y PC)
+        run: node tests/smoke.cjs
+  deploy:
+    name: Publicar
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Generar version.txt (para el aviso de versión nueva)
+        run: sed -n "s/.*export const VER = '\([^']*\)'.*/\1/p" site/js/store.js > site/version.txt && cat site/version.txt && test -s site/version.txt
+      - name: Crear el proyecto de Pages si aún no existe
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create ${{ vars.CF_PROJECT }} --production-branch=main
+        continue-on-error: true
+      - uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site --project-name=${{ vars.CF_PROJECT }} --branch=main --commit-dirty=true
