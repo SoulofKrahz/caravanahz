@@ -5,12 +5,13 @@ let cleanup = null, current = null, guard = null;
 export const setGuard = fn => (guard = fn);
 const listeners = [];
 
+// [ruta, nombre, icono, nombre corto para el modo sencillo]
 export const NAV = [
-  ['inicio', 'Inicio', 'home'],
-  ['mant', 'Mantenimiento', 'wrench'],
-  ['viajes', 'Viajes', 'map'],
-  ['gastos', 'Gastos', 'euro'],
-  ['stats', 'Estadísticas', 'chart'],
+  ['inicio', 'Inicio', 'home', 'Inicio'],
+  ['mant', 'Mantenimiento', 'wrench', 'Revisiones'],
+  ['viajes', 'Viajes', 'map', 'Viajes'],
+  ['gastos', 'Gastos', 'euro', 'Gastos'],
+  ['stats', 'Estadísticas', 'chart', 'Resumen'],
 ];
 
 export const route = (name, fn) => (routes[name] = fn);

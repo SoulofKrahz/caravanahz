@@ -103,6 +103,8 @@ export function validate(el, fields, extra) {
     if (typeof x === 'string') general = x; else if (Array.isArray(x)) errs.push(...x.filter(e => e && e.msg));
   }
   live.forEach(f => mark(el, f, (errs.find(x => x.k === f.k) || {}).msg));
+  // Si el error está en «Más datos», se despliega para que se vea
+  errs.forEach(x => { const i = el.querySelector(`[name="${x.k}"]`), d = i && i.closest('details'); if (d) d.open = true; });
   const ge = el.querySelector('[data-err]');
   if (ge) { ge.hidden = !general; ge.textContent = general; }
   if (errs.length || general) {

@@ -1,6 +1,6 @@
 // Viajes: lista y editor con mapa. Evolución de Rutahz, sin límite a Mallorca y con pernoctas.
 import { D, put, del, uid } from '../db.js';
-import { $, esc, icon, fKm, fDate, fDur, fEur, fNum, fPpl, rel, sheet, form, toast, undo } from '../ui.js';
+import { $, esc, icon, fKm, fDate, fDur, fEur, fNum, fPpl, rel, sheet, form, toast, undo, ask } from '../ui.js';
 import { onSubmit, normKey, normText, R } from '../valid.js';
 import { STOP_TIPOS, NIGHT, prefs, vehicle } from '../store.js';
 import { isoToday, haversine, consumption, lastFuelPrice, daysBetween, addMonths, currentKm, tripCost, eur100Of, tripDone } from '../logic.js';
@@ -37,7 +37,7 @@ const metaF = t => [
     check: v => D.trips.some(x => x.id !== t.id && normKey(x.nombre) === normKey(v)) ? 'Ya tienes un viaje con ese nombre' : null },
   { k: 'inicio', l: 'Salida', t: 'date', minDate: '2000-01-01', maxDate: () => addMonths(isoToday(), 60) },
   { k: 'fin', l: 'Vuelta', t: 'date', minDate: '2000-01-01', maxDate: () => addMonths(isoToday(), 61), after: 'inicio', afterMsg: 'La vuelta no puede ser antes de la salida' },
-  { k: 'notas', l: 'Notas', t: 'textarea', maxLen: 2000 },
+  { k: 'notas', adv: 1, l: 'Notas', t: 'textarea', maxLen: 2000 },
 ];
 const uniqueName = base => { let n = base, i = 2; while (D.trips.some(x => normKey(x.nombre) === normKey(n))) n = `${base} (${i++})`; return n.slice(0, 60); };
 
@@ -68,7 +68,7 @@ function tripMeta(t = {}) {
       const d = s.el.querySelector('[data-del]');
       if (d) d.onclick = async () => {
         const g = D.expenses.filter(e => e.viajeId === t.id).length;
-        if (!confirm(`¿Eliminar «${t.nombre}»?` + (g ? ` Sus ${g} gastos se conservan, sin viaje asignado.` : ''))) return;
+        if (!(await ask({ title: `¿Borrar el viaje «${t.nombre}»?`, text: g ? `Sus ${g} gastos se conservan, sin viaje asignado.` : '', ok: 'Sí, borrar', cancel: 'No', danger: true }))) return;
         const old = { ...t };
         for (const e of D.expenses.filter(e => e.viajeId === t.id)) await put('expenses', { ...e, viajeId: '' });
         await del('trips', t.id); await s.close();

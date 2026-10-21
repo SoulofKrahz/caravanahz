@@ -1,7 +1,7 @@
 // Formularios reutilizados desde varias pantallas: kilómetros, gastos, mantenimiento, documentos y vehículo.
 // Todas las comprobaciones viven aquí, junto a cada formulario.
 import { D, put, del, uid, setKV } from './db.js';
-import { sheet, form, toast, undo, fKm, fDate, fNum, fPpl, icon, esc } from './ui.js';
+import { sheet, form, toast, undo, fKm, fDate, fNum, fPpl, icon, esc, ask, isSimple } from './ui.js';
 import { isoToday, currentKm, kmCheck, addMonths, addDays, lastFuelPrice } from './logic.js';
 import { CATS, ZONAS, DOC_TIPOS, vehicle } from './store.js';
 import { PERFIL, ITV_CAT, itvMeses } from './perfil.js';
@@ -60,8 +60,8 @@ export function expenseSheet(e = {}, preset = {}) {
     { k: 'km', l: 'Kilómetros del cuentakilómetros', t: 'number', int: true, ...R.km, help: 'Necesario para calcular el consumo y el €/km' },
     { k: 'lleno', l: 'Depósito lleno', t: 'switch', help: 'El consumo y el coste por km se calculan de lleno a lleno', fuel: 1 },
     { k: 'concepto', l: 'Concepto', ph: 'Ej. Repsol Lleida, peaje AP-7…', maxLen: 80, sug: used(D.expenses.filter(x => x.cat === e.cat), 'concepto') },
-    { k: 'viajeId', l: 'Viaje', t: 'select', o: trips },
-    { k: 'notas', l: 'Notas', t: 'textarea', maxLen: 1000 },
+    { k: 'viajeId', adv: 1, l: 'Viaje', t: 'select', o: trips },
+    { k: 'notas', adv: 1, l: 'Notas', t: 'textarea', maxLen: 1000 },
   ];
   sheet({
     title: isNew ? (e.cat === 'Combustible' ? 'Nuevo repostaje' : 'Nuevo gasto') : 'Editar gasto', body: form(F, e), foot: actions('Guardar', isNew ? '' : 'Eliminar'),
@@ -89,11 +89,11 @@ export function expenseSheet(e = {}, preset = {}) {
           if (v.lleno && !v.km) er.push({ k: 'km', msg: 'Para calcular el consumo de un lleno necesito los km. Si no los sabes, desmarca «Depósito lleno».' });
         }
         if (v.cat === 'Combustible' && !v.litros && v.lleno) er.push({ k: 'litros', msg: 'Indica los litros o desmarca «Depósito lleno»' });
-        if (v.viajeId) { const t = D.trips.find(x => x.id === v.viajeId); if (t && t.inicio && v.fecha < addDays(t.inicio, -60)) er.push({ k: 'viajeId', msg: `El viaje empieza el ${fDate(t.inicio)}: ¿es el viaje correcto?` }); }
+        if (v.viajeId) { const t = D.trips.find(x => x.id === v.viajeId); if (t && t.inicio && v.fecha < addDays(t.inicio, -60)) er.push({ k: 'viajeId', adv: 1, msg: `El viaje empieza el ${fDate(t.inicio)}: ¿es el viaje correcto?` }); }
         return er;
       }, async v => {
         if (isNew && D.expenses.some(x => x.fecha === v.fecha && x.cat === v.cat && +x.importe === v.importe && normKey(x.concepto) === normKey(v.concepto)))
-          if (!confirm('Ya hay un gasto igual (misma fecha, categoría e importe). ¿Guardarlo otra vez?')) return '';
+          if (!(await ask({ title: '¿Guardar otra vez?', text: 'Ya hay un gasto igual: misma fecha, tipo e importe.', ok: 'Sí, guardarlo', cancel: 'No' }))) return '';
         const rec = { ...e, ...v }; delete rec.ppl;
         await put('expenses', rec);
         if (e.servicioId) { const sv = D.services.find(x => x.id === e.servicioId); if (sv && +sv.coste !== v.importe) await put('services', { ...sv, coste: v.importe }); }
@@ -139,8 +139,8 @@ export function serviceSheet(task = null, sv = {}) {
     { k: 'km', l: 'Kilómetros', t: 'number', step: 1, ...R.km, req: task && +task.intKm ? 'Esta tarea va por km: indica los km' : false },
     { k: 'coste', l: 'Coste (€)', t: 'number', step: 0.01, min: 0, max: 100000, dec: 2, help: 'Opcional' },
     { k: 'taller', l: 'Taller o «Yo mismo»', ph: 'Ej. Taller Pérez', maxLen: 60, sug: used(D.services, 'taller') },
-    ...(isNew ? [{ k: 'crearGasto', l: 'Añadir también a gastos', t: 'switch', help: 'Si indicas coste, se crea el gasto en «Mantenimiento»' }] : []),
-    { k: 'notas', l: 'Notas', t: 'textarea', ph: 'Piezas, referencias, aceite usado…', maxLen: 2000 },
+    ...(isNew ? [{ k: 'crearGasto', adv: 1, l: 'Añadir también a gastos', t: 'switch', help: 'Si indicas coste, se crea el gasto en «Mantenimiento»' }] : []),
+    { k: 'notas', adv: 1, l: 'Notas', t: 'textarea', ph: 'Piezas, referencias, aceite usado…', maxLen: 2000 },
   ];
   sheet({
     title: task ? task.nombre : isNew ? 'Registrar reparación' : 'Editar registro',
@@ -171,7 +171,7 @@ export function serviceSheet(task = null, sv = {}) {
       });
       const d = s.el.querySelector('[data-del]');
       if (d) d.onclick = async () => {
-        if (!confirm('¿Eliminar este registro de mantenimiento?' + (sv.gastoId ? ' También se borrará su gasto.' : ''))) return;
+        if (!(await ask({ title: '¿Borrar este registro?', text: sv.gastoId ? 'También se borrará su gasto.' : '', ok: 'Sí, borrar', cancel: 'No', danger: true }))) return;
         if (sv.gastoId) await del('expenses', sv.gastoId);
         await del('services', sv.id);
         if (sv.tareaId) await syncTaskLast(sv.tareaId);
@@ -198,12 +198,12 @@ export function taskSheet(t = {}) {
   const F = [
     { k: 'nombre', l: 'Nombre', full: 1, ph: 'Ej. Aceite y filtro', req: 'Pon un nombre a la tarea', minLen: 3, maxLen: 60,
       check: v => D.tasks.some(x => x.id !== t.id && normKey(x.nombre) === normKey(v)) ? 'Ya tienes una tarea con ese nombre' : null },
-    { k: 'zona', l: 'Zona', t: 'select', o: ZONAS, req: true },
+    { k: 'zona', adv: 1, l: 'Zona', t: 'select', o: ZONAS, req: true },
     { k: 'intMeses', l: 'Cada (meses)', t: 'number', step: 1, int: true, min: 0, max: 240, help: 'Vacío o 0 = sin límite de tiempo' },
     { k: 'intKm', l: 'Cada (km)', t: 'number', step: 500, int: true, min: 0, max: 500000, help: 'Vacío o 0 = sin límite de km' },
     ...(hasHist ? [] : [{ t: 'section', l: 'Última vez que se hizo' }, { k: 'ultFecha', l: 'Fecha', ...pastDate({ quick: false }) },
       { k: 'ultKm', l: 'Kilómetros', t: 'number', step: 1, ...R.km, max: cur || KM_MAX, help: cur ? 'Como mucho ' + fKm(cur) + ' (los actuales)' : '' }]),
-    { k: 'notas', l: 'Notas', t: 'textarea', ph: 'Referencia de pieza, tipo de aceite, intervalo del manual…', maxLen: 2000 },
+    { k: 'notas', adv: 1, l: 'Notas', t: 'textarea', ph: 'Referencia de pieza, tipo de aceite, intervalo del manual…', maxLen: 2000 },
   ];
   sheet({
     title: isNew ? 'Nueva tarea' : 'Editar tarea',
@@ -224,7 +224,7 @@ export function taskSheet(t = {}) {
       const d = s.el.querySelector('[data-del]');
       if (d) d.onclick = async () => {
         const n = D.services.filter(x => x.tareaId === t.id).length;
-        if (!confirm(`¿Eliminar «${t.nombre}» del plan?` + (n ? ` Sus ${n} registros se conservan en el historial.` : ''))) return;
+        if (!(await ask({ title: `¿Quitar «${t.nombre}» del plan?`, text: n ? `Sus ${n} registros se conservan en el historial.` : 'Dejará de avisarte de esta tarea.', ok: 'Sí, quitar', cancel: 'No', danger: true }))) return;
         const old = { ...t }; await del('tasks', t.id); await s.close(); refresh();
         undo('Tarea eliminada', async () => { await put('tasks', old); refresh(); });
       };
@@ -241,11 +241,11 @@ export function docSheet(d = {}) {
     { k: 'tipo', l: 'Tipo', t: 'select', o: DOC_TIPOS, req: true },
     { k: 'nombre', l: 'Compañía o detalle', ph: 'Ej. Mapfre, Estación ITV…', maxLen: 60 },
     { k: 'vence', l: 'Caduca el', t: 'date', req: 'Indica la fecha de caducidad', minDate: '2000-01-01', maxDate: () => addMonths(isoToday(), 12 * 20) },
-    { k: 'avisoDias', l: 'Avisar con (días)', t: 'number', step: 1, int: true, min: 0, max: 365, req: 'Indica con cuántos días avisar' },
+    { k: 'avisoDias', adv: 1, l: 'Avisar con (días)', t: 'number', step: 1, int: true, min: 0, max: 365, req: 'Indica con cuántos días avisar' },
     { k: 'importe', l: 'Importe (€)', t: 'number', step: 0.01, min: 0, max: 20000, dec: 2, help: 'Para el aviso de renovación' },
-    { k: 'ref', l: 'Nº de póliza / referencia', ph: 'Opcional', maxLen: 40 },
+    { k: 'ref', adv: 1, l: 'Nº de póliza / referencia', ph: 'Opcional', maxLen: 40 },
     { k: 'tel', l: 'Teléfono de asistencia', t: 'tel', ph: 'Opcional', pattern: [/^\+?[0-9 ()-]{6,20}$/, 'Teléfono no válido (solo números, espacios y +)'] },
-    { k: 'notas', l: 'Notas', t: 'textarea', maxLen: 2000 },
+    { k: 'notas', adv: 1, l: 'Notas', t: 'textarea', maxLen: 2000 },
   ];
   sheet({
     title: isNew ? 'Nuevo documento' : d.tipo, body: form(F, d),
@@ -255,9 +255,11 @@ export function docSheet(d = {}) {
         const er = [];
         if (v.tipo === 'Otro' && !v.nombre) er.push({ k: 'nombre', msg: 'Para «Otro», indica de qué documento se trata' });
         if (D.docs.some(x => x.id !== d.id && docKey(x) === docKey(v))) er.push({ k: 'vence', msg: 'Ya tienes este mismo documento con esta fecha' });
-        if (isNew && v.vence < isoToday() && !er.length && !confirm('Esa fecha ya ha pasado: el documento aparecerá como caducado. ¿Guardarlo así?')) er.push({ k: 'vence', msg: 'Revisa la fecha de caducidad' });
         return er;
-      }, async v => { await put('docs', { ...d, ...v }); await s.close(); toast('Documento guardado'); refresh(); });
+      }, async v => {
+        if (isNew && v.vence < isoToday() && !(await ask({ title: 'Esa fecha ya ha pasado', text: 'El documento aparecerá como caducado.', ok: 'Guardar así', cancel: 'Corregir la fecha' }))) return '';
+        await put('docs', { ...d, ...v }); await s.close(); toast('Documento guardado'); refresh();
+      });
       const r = s.el.querySelector('[data-ren]');
       if (r) r.onclick = () => { s.close().then(() => renewSheet(d)); };
       const x = s.el.querySelector('[data-del]');
@@ -294,23 +296,23 @@ function renewSheet(d) {
 /* ---------- Vehículo ---------- */
 export const VEH_F = [
   { k: 'nombre', l: 'Nombre (para ti)', ph: 'Ej. La Tortuga', req: 'Ponle un nombre a tu autocaravana', minLen: 2, maxLen: 40 },
-  { k: 'matricula', l: 'Matrícula', ph: '1234 BCD', maxLen: 14, norm: normPlate, check: checkPlate },
+  { k: 'matricula', adv: 1, l: 'Matrícula', ph: '1234 BCD', maxLen: 14, norm: normPlate, check: checkPlate },
   { k: 'marca', l: 'Marca y modelo', ph: 'Ej. Benimar Tessoro 482', req: 'Indica la marca y el modelo', minLen: 2, maxLen: 60 },
-  { k: 'base', l: 'Base / motor', ph: 'Ej. Fiat Ducato 2.2 140 CV', maxLen: 60 },
-  { k: 'carroceria', l: 'Tipo de autocaravana', t: 'select', o: ['Capuchina', 'Perfilada', 'Integral', 'Camper'] },
+  { k: 'base', adv: 1, l: 'Base / motor', ph: 'Ej. Fiat Ducato 2.2 140 CV', maxLen: 60 },
+  { k: 'carroceria', adv: 1, l: 'Tipo de autocaravana', t: 'select', o: ['Capuchina', 'Perfilada', 'Integral', 'Camper'] },
   { k: 'fechaMat', l: 'Fecha de 1ª matriculación', t: 'date', past: true, minDate: '1994-01-01', maxDate: '2002-12-31', help: 'Está en el permiso de circulación. La serie 230 se fabricó de 1994 a 2002.' },
-  { k: 'fechaCompra', l: 'Fecha en que la compraste', t: 'date', past: true, minDate: '1994-01-01', after: 'fechaMat', afterMsg: 'No puede ser antes de la matriculación', help: 'Opcional: referencia si no sabes cuándo se hizo un mantenimiento' },
-  { k: 'kmCompra', l: 'Km cuando la compraste', t: 'number', step: 1, int: true, min: 0, max: KM_MAX, check: (v, a) => (a.km !== '' && v > a.km ? 'No puede ser más que los km actuales' : null) },
-  { k: 'catITV', l: 'Categoría en la ficha técnica', t: 'select', o: ITV_CAT, full: 1, help: 'Decide si la ITV es anual o cada 6 meses' },
+  { k: 'fechaCompra', adv: 1, l: 'Fecha en que la compraste', t: 'date', past: true, minDate: '1994-01-01', after: 'fechaMat', afterMsg: 'No puede ser antes de la matriculación', help: 'Opcional: referencia si no sabes cuándo se hizo un mantenimiento' },
+  { k: 'kmCompra', adv: 1, l: 'Km cuando la compraste', t: 'number', step: 1, int: true, min: 0, max: KM_MAX, check: (v, a) => (a.km !== '' && v > a.km ? 'No puede ser más que los km actuales' : null) },
+  { k: 'catITV', adv: 1, l: 'Categoría en la ficha técnica', t: 'select', o: ITV_CAT, full: 1, help: 'Decide si la ITV es anual o cada 6 meses' },
   { k: 'km', l: 'Kilómetros actuales', t: 'number', step: 1, int: true, min: 0, max: KM_MAX, req: 'Indica los km actuales: el plan de mantenimiento los necesita', help: 'Aproximados valen: los repostajes y mantenimientos que apuntes después mandan' },
-  { t: 'section', l: 'Medidas (para planificar rutas)' },
-  { t: 'note', l: PERFIL.ayudaMedidas },
-  { k: 'altura', l: 'Altura (m)', t: 'number', step: 0.01, min: 1.5, max: 4.5, dec: 2, help: 'Con antena y claraboyas' },
-  { k: 'longitud', l: 'Longitud (m)', t: 'number', step: 0.01, min: 3, max: 14, dec: 2 },
-  { k: 'anchura', l: 'Anchura (m)', t: 'number', step: 0.01, min: 1.5, max: 2.6, dec: 2, help: 'Sin retrovisores' },
-  { k: 'mma', l: 'MMA (kg)', t: 'number', step: 10, int: true, min: 1500, max: 7500 },
-  { k: 'deposito', l: 'Depósito combustible (L)', t: 'number', step: 1, int: true, min: 30, max: 300 },
-  { k: 'aguaLimpia', l: 'Agua limpia (L)', t: 'number', step: 1, int: true, min: 0, max: 500 },
+  { t: 'section', adv: 1, l: 'Medidas (para planificar rutas)' },
+  { t: 'note', adv: 1, l: PERFIL.ayudaMedidas },
+  { k: 'altura', adv: 1, l: 'Altura (m)', t: 'number', step: 0.01, min: 1.5, max: 4.5, dec: 2, help: 'Con antena y claraboyas' },
+  { k: 'longitud', adv: 1, l: 'Longitud (m)', t: 'number', step: 0.01, min: 3, max: 14, dec: 2 },
+  { k: 'anchura', adv: 1, l: 'Anchura (m)', t: 'number', step: 0.01, min: 1.5, max: 2.6, dec: 2, help: 'Sin retrovisores' },
+  { k: 'mma', adv: 1, l: 'MMA (kg)', t: 'number', step: 10, int: true, min: 1500, max: 7500 },
+  { k: 'deposito', adv: 1, l: 'Depósito combustible (L)', t: 'number', step: 1, int: true, min: 30, max: 300 },
+  { k: 'aguaLimpia', adv: 1, l: 'Agua limpia (L)', t: 'number', step: 1, int: true, min: 0, max: 500 },
 ];
 export function vehicleSheet(onDone) {
   const v0 = vehicle(), first = !v0.nombre;
@@ -339,8 +341,8 @@ export function vehicleSheet(onDone) {
 export function quickAdd() {
   const opts = [
     ['fuel', 'Repostaje', 'Litros, precio y km', () => expenseSheet({}, { cat: 'Combustible' })],
-    ['euro', 'Gasto', 'Área, peaje, camping…', () => expenseSheet({}, { cat: 'Área / camping' })],
-    ['wrench', 'Mantenimiento', 'Algo que has hecho', () => import('./mods/mant.js').then(m => m.pickTask())],
+    ['euro', isSimple() ? 'Otro gasto' : 'Gasto', 'Área, peaje, camping…', () => expenseSheet({}, { cat: 'Área / camping' })],
+    ['wrench', isSimple() ? 'Revisión hecha' : 'Mantenimiento', isSimple() ? 'Aceite, filtros, gas…' : 'Algo que has hecho', () => import('./mods/mant.js').then(m => m.pickTask())],
     ['gauge', 'Kilómetros', 'Actualizar el cuentakilómetros', odoSheet],
     ['map', 'Viaje', 'Planificar uno nuevo', () => { location.hash = '#/viajes/nuevo'; }],
     ['doc', 'Documento', 'ITV, seguro, impuesto…', () => docSheet({})],

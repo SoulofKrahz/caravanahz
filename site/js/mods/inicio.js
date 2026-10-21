@@ -1,5 +1,5 @@
 import { D, getKV, setKV } from '../db.js';
-import { esc, icon, fKm, fEur, fEur0, fNum, fDate, rel, stChip, toast } from '../ui.js';
+import { esc, icon, fKm, fEur, fEur0, fNum, fDate, rel, stChip, toast, isSimple } from '../ui.js';
 import { ctx, tasksWithStatus, docsWithStatus, vehicle, seedPlan, ZONA_ICO, prefs, needsProfilePlan, applyProfilePlan } from '../store.js';
 import { PERFIL } from '../perfil.js';
 import { consumption, kmBetween, isoToday, daysBetween, tripDone } from '../logic.js';
@@ -9,7 +9,7 @@ import { tripKmSheet } from './viajes.js';
 import { docName } from './gastos.js';
 import { bannerDue, bannerText, canPrompt, install, snooze } from '../install.js';
 import { go } from '../router.js';
-import { backupJSON } from './ajustes.js';
+import { backupSheet } from './ajustes.js';
 
 /** Km recorridos en un año natural (interpolando entre lecturas) */
 export function kmInYear(year) { return kmBetween(D, year + '-01-01', year + '-12-31'); }
@@ -49,23 +49,67 @@ export function render(view) {
     if (x.kind === 't') {
       const s = x.s, parts = [];
       if (s.dueDate) parts.push(fDate(s.dueDate) + ' (' + rel(s.dueDate) + ')');
-      if (s.dueKm) parts.push(fKm(s.dueKm) + (s.kmLeft < 0 ? ` · pasado ${fKm(-s.kmLeft)}` : ` · faltan ${fKm(s.kmLeft)}`));
+      if (s.dueKm) parts.push(s.kmLeft < 0 ? `te has pasado ${fKm(-s.kmLeft)}` : `faltan ${fKm(s.kmLeft)}`);
       return `<button class="row" data-t="${x.t.id}"><span class="ico">${icon(ZONA_ICO[x.t.zona] || 'wrench')}</span><span class="m"><b>${esc(x.t.nombre)}</b><small>${esc(parts.join(' · '))}</small></span>${stChip(s.state)}</button>`;
     }
     return `<button class="row" data-d="${x.d.id}"><span class="ico">${icon('doc')}</span><span class="m"><b>${esc(docName(x.d))}</b><small>Caduca el ${fDate(x.d.vence)} (${rel(x.d.vence)})</small></span>${stChip(x.s.state, x.s.state === 'over' ? 'Caducado' : 'Renovar')}</button>`;
   };
 
-  view.innerHTML = `
-  <div class="vh"><div><h1>${esc(v.nombre || 'Tu autocaravana')}</h1><p>${esc([v.marca, v.matricula].filter(Boolean).join(' · ') || 'Completa sus datos en Ajustes')}</p></div></div>
+  const simple = isSimple();
+  const banners = `
   ${kmAsk ? `<div class="banner"><span>${kmAsk.which === 'ini' ? `<b>¿Has salido hacia ${esc(kmAsk.t.nombre)}?</b> Apunta los km del cuentakilómetros para saber lo que recorres de verdad.` : `<b>¿Ya has vuelto de ${esc(kmAsk.t.nombre)}?</b> Apunta los km y el viaje queda cerrado.`}</span><button id="kma">Apuntar km</button></div>` : ''}
   ${needsProfilePlan() ? `<div class="banner"><span><b>Plan específico para tu Ducato 1.9 TD.</b> Sustituye los intervalos genéricos (aceite cada 10.000 km, distribución cada 60.000 km o 3 años, sellado de la capuchina…). Conserva lo que ya hayas apuntado.</span><button id="pp">Aplicar</button></div>` : ''}
   ${showInst ? `<div class="banner" id="ib"><span>${esc(bannerText())}</span>${canPrompt() ? '<button id="ig">Instalar</button>' : ''}<button id="iz">${canPrompt() ? 'Ahora no' : 'Entendido'}</button></div>` : ''}
-  ${needBk ? `<div class="banner"><span>${lb ? `Hace ${Math.floor((Date.now() - lb) / 864e5)} días de tu última copia de seguridad.` : 'Aún no has hecho ninguna copia de seguridad.'} Los datos solo están en este dispositivo.</span><button id="bk">Hacer copia</button><button id="bkz">Más tarde</button></div>` : ''}
-  <div class="kpis">
+  ${needBk ? `<div class="banner"><span>${lb ? `Hace ${Math.floor((Date.now() - lb) / 864e5)} días de tu última copia de seguridad.` : 'Aún no has hecho ninguna copia de seguridad.'} Tus datos solo están en este móvil: si se pierde o se rompe, se pierden.</span><button id="bk">Hacer copia</button><button id="bkz">Más tarde</button></div>` : ''}`;
+  const odo = `<div class="kpis">
     <button class="kpi hero" id="km"><span class="ico" style="width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:var(--tint);color:var(--em)">${icon('gauge')}</span>
       <span class="hb-m"><span class="l">Cuentakilómetros</span><span class="v">${fKm(c.km)}</span><span class="s">${c.rate ? `Unos ${fNum(c.rate * 30, 0)} km al mes` : 'Toca para actualizar'}</span></span>
       <span class="btn sm o hb-act">${icon('edit')}<span>Actualizar</span></span></button>
-  </div>
+  </div>`;
+  const attHtml = `<div class="sec"><h2>${simple ? 'Lo que toca hacer' : 'Requiere atención'} <a href="#/mant">${simple ? 'Ver todo' : 'Ver plan'}</a></h2>
+      ${att.length ? `<div class="list">${att.slice(0, simple ? 5 : 7).map(attRow).join('')}</div>${att.length > (simple ? 5 : 7) ? `<p class="hint" style="margin:8px 4px">Y ${att.length - (simple ? 5 : 7)} más en ${simple ? 'Revisiones' : 'Mantenimiento'}.</p>` : ''}`
+        : `<div class="list"><div class="empty sm">${icon('check')} Todo al día${nd ? '' : '. Nada vence en los próximos ' + c.warnDays + ' días.'}</div></div>`}
+      ${nd && prefs().showNd ? `<div class="banner" style="margin:12px 0 0"><span><b>${nd} ${nd === 1 ? 'revisión' : 'revisiones'} sin fecha.</b> ${simple ? 'Dime cuándo se hicieron por última vez y te avisaré a tiempo.' : 'Sin esa fecha no puedo avisarte.'}</span><button id="nd">${simple ? 'Poner fechas' : 'Completar'}</button></div>` : ''}
+    </div>`;
+  const tripsHtml = `<div class="sec"><h2>Viajes <a href="#/viajes">Ver todos</a></h2>
+      <div class="list">
+        ${next ? tripRow(next, 'Próximo') : ''}${last ? tripRow(last, 'Último') : ''}
+        ${!next && !last ? `<div class="empty sm">Aún no hay viajes. <a href="#/viajes">Planifica el primero</a>.</div>` : ''}
+      </div>
+      ${D.docs.length ? '' : `<div class="banner" style="margin:12px 0 0"><span>Añade la ITV y el seguro para que te avise antes de que caduquen.</span><button id="nd2">Añadir</button></div>`}
+    </div>`;
+  const asisHtml = asis ? `<a class="lnk" style="margin:10px 0 0" href="tel:${esc(String(asis.tel).replace(/[^+0-9]/g, ''))}">${icon('phone')}Asistencia en carretera: ${esc(asis.nombre || asis.tipo)} · ${esc(asis.tel)}${icon('right')}</a>` : '';
+
+  if (simple) {
+    // Modo sencillo: primero lo que se quiere hacer (botones grandes), luego lo que toca y un resumen en una frase
+    const resumen = gY || kmY ? `En ${year} llevas <b>${fEur0(gY)}</b> gastados${kmY ? ` y <b>${fKm(kmY)}</b> recorridos` : ''}.${cons.eur100 ? ` El gasóleo te sale a <b>${fEur(cons.eur100)}</b> cada 100 km.` : ''}` : 'Cuando apuntes repostajes y gastos, aquí verás cuánto llevas gastado este año.';
+    const help = !getKV('helpDone', false) ? `<div class="card help"><h3>Cómo se usa</h3><ol>
+        <li><b>Cada vez que eches gasóleo</b>, pulsa «Repostaje» y apunta los litros, el precio y los km.</li>
+        <li><b>Cuando hagas una revisión</b> (aceite, filtros…), pulsa «Revisión hecha»: la app te avisará de la siguiente.</li>
+        <li><b>Antes de un viaje</b>, créalo en «Viajes» para ver la ruta y lo que costará.</li></ol>
+        <button class="btn g w" id="hd">Entendido</button></div>` : '';
+    view.innerHTML = `
+    <div class="vh"><div><h1>${esc(v.nombre || 'Tu autocaravana')}</h1></div></div>
+    ${banners}
+    ${help}
+    <div class="sec"><h2>¿Qué quieres apuntar?</h2>
+      <div class="bigact">
+        <button id="qf"><span class="ico">${icon('fuel')}</span><b>Repostaje</b><small>He echado gasóleo</small></button>
+        <button id="qg"><span class="ico">${icon('euro')}</span><b>Otro gasto</b><small>Área, peaje, camping…</small></button>
+        <button id="qm"><span class="ico">${icon('wrench')}</span><b>Revisión hecha</b><small>Aceite, filtros, gas…</small></button>
+        <button id="qv"><span class="ico">${icon('map')}</span><b>Nuevo viaje</b><small>Ruta y paradas</small></button>
+      </div>${asisHtml}
+    </div>
+    <div style="margin-top:20px">${attHtml}</div>
+    ${odo.replace('<div class="kpis">', '<div class="kpis" style="margin-top:20px">')}
+    <a class="card summ" href="#/stats"><p>${resumen}</p><span>Ver el resumen ${icon('right')}</span></a>
+    <div style="margin-top:20px">${tripsHtml}</div>
+    <div class="pb"></div>`;
+  } else {
+  view.innerHTML = `
+  <div class="vh"><div><h1>${esc(v.nombre || 'Tu autocaravana')}</h1><p>${esc([v.marca, v.matricula].filter(Boolean).join(' · ') || 'Completa sus datos en Ajustes')}</p></div></div>
+  ${banners}
+  ${odo}
   <div class="kpis k3">
     <div class="kpi"><span class="l">${icon('euro')}Gasto ${year}</span><span class="v">${fEur0(gY)}</span><span class="s">${kmY ? fNum(gY / kmY, 2) + ' €/km' : 'Sin km registrados'}</span></div>
     <div class="kpi"><span class="l">${icon('map')}Km ${year}</span><span class="v">${kmY ? fKm(kmY) : '—'}</span><span class="s">${(n => n + (n === 1 ? ' viaje' : ' viajes'))(D.trips.filter(t => (t.inicio || '').startsWith(year)).length)}</span></div>
@@ -74,24 +118,16 @@ export function render(view) {
 
   <div class="sec"><h2>Acciones rápidas</h2>
     <div class="brow"><button class="btn" id="qf">${icon('fuel')}Repostaje</button><button class="btn g" id="qg">${icon('euro')}Gasto</button><button class="btn g" id="qm">${icon('wrench')}Mantenimiento hecho</button><button class="btn g" id="qv">${icon('map')}Nuevo viaje</button></div>
-    ${asis ? `<a class="lnk" style="margin:10px 0 0" href="tel:${esc(String(asis.tel).replace(/[^+0-9]/g, ''))}">${icon('phone')}Asistencia en carretera: ${esc(asis.nombre || asis.tipo)} · ${esc(asis.tel)}${icon('right')}</a>` : ''}
+    ${asisHtml}
   </div>
 
   <div class="grid2" style="margin-top:20px">
-    <div class="sec"><h2>Requiere atención <a href="#/mant">Ver plan</a></h2>
-      ${att.length ? `<div class="list">${att.slice(0, 7).map(attRow).join('')}</div>${att.length > 7 ? `<p class="hint" style="margin:8px 4px">Y ${att.length - 7} más en Mantenimiento.</p>` : ''}`
-        : `<div class="list"><div class="empty sm">${icon('check')} Todo al día${nd ? '' : '. Nada vence en los próximos ' + c.warnDays + ' días.'}</div></div>`}
-      ${nd && prefs().showNd ? `<div class="banner" style="margin:12px 0 0"><span><b>${nd} ${nd === 1 ? 'tarea' : 'tareas'} sin «última vez».</b> Sin esa fecha no puedo avisarte.</span><button id="nd">Completar</button></div>` : ''}
-    </div>
-    <div class="sec"><h2>Viajes <a href="#/viajes">Ver todos</a></h2>
-      <div class="list">
-        ${next ? tripRow(next, 'Próximo') : ''}${last ? tripRow(last, 'Último') : ''}
-        ${!next && !last ? `<div class="empty sm">Aún no hay viajes. <a href="#/viajes">Planifica el primero</a>.</div>` : ''}
-      </div>
-      ${D.docs.length ? '' : `<div class="banner" style="margin:12px 0 0"><span>Añade la ITV y el seguro para que te avise antes de que caduquen.</span><button id="nd2">Añadir</button></div>`}
-    </div>
+    ${attHtml}
+    ${tripsHtml}
   </div>
   <div class="pb"></div>`;
+  }
+  const hd = view.querySelector('#hd'); if (hd) hd.onclick = async () => { await setKV('helpDone', true); render(view); };
 
   view.querySelector('#km').onclick = odoSheet;
   view.querySelector('#qf').onclick = () => expenseSheet({}, { cat: 'Combustible' });
@@ -105,7 +141,7 @@ export function render(view) {
   const kma = view.querySelector('#kma'); if (kma) kma.onclick = () => tripKmSheet(kmAsk.t, kmAsk.which, () => render(view));
   const pp = view.querySelector('#pp');
   if (pp) pp.onclick = async () => { const r = await applyProfilePlan(); toast(`Plan adaptado: ${r.upd} tareas actualizadas, ${r.add} nuevas${r.rem ? ', ' + r.rem + ' retiradas' : ''}`); if (r.add) go('mant/completar'); else render(view); };
-  const bk = view.querySelector('#bk'); if (bk) bk.onclick = backupJSON;
+  const bk = view.querySelector('#bk'); if (bk) bk.onclick = () => backupSheet(() => render(view));
   const ig = view.querySelector('#ig'); if (ig) ig.onclick = async () => { await install(); render(view); };
   const iz = view.querySelector('#iz'); if (iz) iz.onclick = () => { snooze(); render(view); };
   const bkz = view.querySelector('#bkz'); if (bkz) bkz.onclick = async () => { await setKV('bkSnooze', Date.now() + 14 * 864e5); render(view); };

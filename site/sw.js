@@ -1,5 +1,5 @@
 // Service worker: la app funciona sin conexión. El mapa, las rutas y la búsqueda necesitan red.
-const V = 'cz-2026-10-21-1';
+const V = 'cz-2026-10-21-2';
 const SHELL = ['./', 'index.html', 'css/app.css', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png',
   'js/app.js', 'js/db.js', 'js/logic.js', 'js/ui.js', 'js/store.js', 'js/router.js', 'js/forms.js', 'js/valid.js', 'js/perfil.js', 'js/theme.js', 'js/install.js',
   'js/mods/inicio.js', 'js/mods/mant.js', 'js/mods/viajes.js', 'js/mods/gastos.js', 'js/mods/combustible.js', 'js/mods/stats.js', 'js/mods/ajustes.js'];

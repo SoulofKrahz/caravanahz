@@ -417,3 +417,84 @@ a.kpi{text-decoration:none;color:var(--tx)}a.kpi:hover{border-color:var(--em2)}
 }
 .row.call{padding-top:8px;padding-bottom:10px;border-top:1px dashed var(--bd)}.row.call .ico{width:32px;height:32px;background:none}.row.call b{color:var(--em);font-size:calc(13.5px*var(--fs,1))}
 .vnb{margin:12px 0 0;border-color:var(--em2);background:var(--tint)}.vnb span{font-weight:600}
+
+/* ================= MODO SENCILLO =================
+   Pensado para leer con gafas y tocar sin precisión: letra mayor, más contraste, botones grandes,
+   nada escondido tras gestos. Se activa con la clase .simple en <html> (Ajustes → Apariencia). */
+.fab span{display:none}
+html.simple{--mu:#475166}
+html.simple[data-theme=dark]{--mu:#b8c4d4}
+html.simple body{line-height:1.55}
+html.simple .btn{min-height:52px;font-size:calc(16px*var(--fs,1));border-radius:14px;padding:12px 18px}
+html.simple .btn.sm{min-height:46px;font-size:calc(15px*var(--fs,1))}
+html.simple .btn svg{width:20px;height:20px}
+html.simple .row{padding:16px 16px;gap:14px}
+html.simple .row .ico{width:44px;height:44px}
+html.simple .row .ico svg{width:22px;height:22px}
+html.simple .row .m b{font-size:calc(16px*var(--fs,1))}
+html.simple .row .m small{font-size:calc(14px*var(--fs,1));white-space:normal}
+html.simple .st{font-size:calc(13.5px*var(--fs,1));padding:4px 11px 4px 9px}
+html.simple .st svg{width:15px;height:15px}
+html.simple .seg button{min-height:50px;font-size:calc(15px*var(--fs,1))}
+html.simple .hint,html.simple .fld small,html.simple .set>p{font-size:calc(14px*var(--fs,1))}
+html.simple .fld>span{font-size:calc(14px*var(--fs,1));color:var(--tx)}
+html.simple .fld input,html.simple .fld select,html.simple .fld textarea{min-height:52px;font-size:calc(17px*var(--fs,1));border-width:1.5px;border-color:color-mix(in srgb,var(--mu) 45%,var(--bd))}
+html.simple .kpi .l{font-size:calc(13.5px*var(--fs,1))}
+html.simple .kpi .s{font-size:calc(13.5px*var(--fs,1))}
+html.simple .sh-h h2{font-size:calc(23px*var(--fs,1))}
+html.simple .vh h1{font-size:calc(30px*var(--fs,1))}
+html.simple .gh{font-size:calc(14px*var(--fs,1))}
+html.simple .toast{font-size:calc(16px*var(--fs,1));padding:14px 20px}
+html.simple .dq button{min-height:44px;font-size:calc(14.5px*var(--fs,1))}
+html.simple .banner{font-size:calc(15px*var(--fs,1))}
+@media(max-width:760px){
+  html.simple body{padding-bottom:calc(78px + env(safe-area-inset-bottom))}
+  html.simple .bb a{padding:9px 0;font-size:calc(12px*var(--fs,1))}
+  html.simple .bb a span{font-size:calc(12px*var(--fs,1))}
+  html.simple .bb svg{width:25px;height:25px}
+  html.simple .fab{width:auto;height:58px;padding:0 22px 0 18px;border-radius:29px;gap:8px;grid-auto-flow:column;bottom:calc(88px + env(safe-area-inset-bottom))}
+  html.simple .fab span{display:inline;font-weight:700;font-size:calc(17px*var(--fs,1))}
+  html.simple .pb{padding-bottom:100px}
+  html.simple .toast,html.simple .undo{bottom:calc(160px + env(safe-area-inset-bottom))}
+}
+/* Diálogo de pregunta propio (en lugar de las ventanas del sistema) */
+.ask-ov{z-index:80}
+.ask{position:fixed;z-index:81;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,calc(100vw - 32px));background:var(--card);border:1px solid var(--bd);border-radius:20px;padding:22px 20px 18px;box-shadow:0 30px 60px -20px #0009;animation:pop .18s}
+.ask h2{font:600 calc(22px*var(--fs,1))/1.25 Newsreader,Georgia,serif;margin-bottom:8px}
+.ask p{color:var(--mu);font-size:calc(15.5px*var(--fs,1));line-height:1.5}
+.ask-b{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
+.ask-b .btn{flex:1 1 140px;min-height:52px}
+.btn.dd{background:var(--bad);color:#fff}
+
+/* Inicio en modo sencillo */
+.bigact{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.bigact button{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:16px;border-radius:18px;border:1.5px solid var(--bd);background:var(--card);box-shadow:var(--sh);text-align:left;min-height:128px}
+.bigact button:first-child{background:var(--em);border-color:var(--em);color:var(--onem)}
+.bigact button:first-child .ico{background:color-mix(in srgb,var(--onem) 18%,transparent);color:var(--onem)}
+.bigact button:first-child small{color:color-mix(in srgb,var(--onem) 85%,transparent)}
+.bigact .ico{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:var(--tint);color:var(--em)}
+.bigact .ico svg{width:24px;height:24px}
+.bigact b{font-size:calc(18px*var(--fs,1));font-weight:700;line-height:1.2}
+.bigact small{font-size:calc(13.5px*var(--fs,1));color:var(--mu);line-height:1.3}
+.bigact button:active{transform:scale(.98)}
+.card.summ{display:block;margin-top:16px;text-decoration:none;color:var(--tx);font-size:calc(16.5px*var(--fs,1));line-height:1.5}
+.card.summ span{display:flex;align-items:center;gap:4px;margin-top:8px;color:var(--em);font-weight:600;font-size:calc(15px*var(--fs,1))}
+.card.help{margin-bottom:16px;border:1.5px solid var(--em2)}
+.card.help h3{font:600 calc(20px*var(--fs,1)) Newsreader,serif;margin-bottom:8px}
+.card.help ol{padding-left:22px;display:flex;flex-direction:column;gap:8px;margin-bottom:14px;font-size:calc(15.5px*var(--fs,1))}
+details.more{border:1.5px dashed var(--bd);border-radius:14px;padding:4px 14px}
+details.more>summary{cursor:pointer;list-style:none;font-weight:600;color:var(--em);min-height:48px;display:flex;align-items:center;font-size:calc(15px*var(--fs,1))}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:"＋";margin-right:8px;font-weight:700}
+details.more[open]>summary::before{content:"－"}
+details.more>.form{padding:4px 0 14px}
+html.simple .empty.sm a,html.simple .hint a{display:inline-flex;align-items:center;min-height:44px}
+
+/* Modo sencillo: «Apuntar» como barra fija a lo ancho, encima del menú: nunca tapa nada porque la página deja su hueco */
+@media(max-width:760px){
+  html.simple .fab{left:12px;right:12px;width:auto;border-radius:16px;justify-content:center;bottom:calc(76px + env(safe-area-inset-bottom));height:54px;box-shadow:0 6px 18px -8px #0007}
+  html.simple .fab.off{transform:none;opacity:1;pointer-events:auto}
+  html.simple body.has-fab{padding-bottom:calc(146px + env(safe-area-inset-bottom))}
+  html.simple body.has-fab .toast,html.simple body.has-fab .undo{bottom:calc(150px + env(safe-area-inset-bottom))}
+}
+html.simple .row .m b{white-space:normal;overflow:visible}

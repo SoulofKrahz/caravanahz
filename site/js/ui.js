@@ -34,17 +34,49 @@ export function rel(iso, today = isoToday()) {
 export function ago(ts) { const d = Math.floor((Date.now() - ts) / 864e5); return d <= 0 ? 'hoy' : d === 1 ? 'ayer' : `hace ${d} días`; }
 
 const ST = { ok: ['check', 'Al día'], soon: ['clock', 'Próximo'], over: ['alert', 'Vencido'], nd: ['edit', 'Sin datos'] };
-export const stChip = (state, label) => `<span class="st ${state}">${icon(ST[state][0])}${esc(label || ST[state][1])}</span>`;
+// En modo sencillo, palabras de andar por casa: «Toca ya» en vez de «Vencido»
+const ST_SIMPLE = { ok: 'Al día', soon: 'Pronto', over: 'Toca ya', nd: 'Falta fecha' };
+export const stChip = (state, label) => `<span class="st ${state}">${icon(ST[state][0])}${esc(label || (isSimple() ? ST_SIMPLE[state] : ST[state][1]))}</span>`;
+/** Unidades en palabras en modo sencillo */
+export const uL100 = () => (isSimple() ? ' litros cada 100 km' : ' L/100 km');
+export const uEurKm = () => (isSimple() ? ' € por km' : ' €/km');
+export { isSimple };
 
 /* ---------- Avisos ---------- */
 let tt;
-export function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2400); }
+const isSimple = () => document.documentElement.classList.contains('simple');
+export function toast(m) {
+  const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt);
+  // En modo sencillo el aviso dura más (da tiempo a leerlo) y el móvil vibra un instante
+  if (isSimple()) try { navigator.vibrate && navigator.vibrate(25); } catch (e) {}
+  tt = setTimeout(() => t.classList.remove('show'), isSimple() ? 5000 : 2600);
+}
 let ut;
 export function undo(msg, fn) {
   const u = $('#undo'); u.querySelector('span').textContent = msg; u.hidden = false;
   u.querySelector('button').onclick = () => { u.hidden = true; fn(); };
-  clearTimeout(ut); ut = setTimeout(() => (u.hidden = true), 6000);
+  clearTimeout(ut); ut = setTimeout(() => (u.hidden = true), isSimple() ? 12000 : 7000);
 }
+
+/* ---------- Preguntas (sustituye a confirm(): botones grandes y con texto claro) ----------
+   ask({ title, text, ok: 'Sí, borrar', cancel: 'No', danger: true }) → Promise<boolean> */
+export function ask({ title, text = '', ok = 'Sí', cancel = 'Cancelar', danger = false }) {
+  return new Promise(res => {
+    const ov = document.createElement('div'), dl = document.createElement('div');
+    ov.className = 'ov show ask-ov'; dl.className = 'ask'; dl.setAttribute('role', 'alertdialog'); dl.setAttribute('aria-modal', 'true'); dl.setAttribute('aria-label', title);
+    dl.innerHTML = `<h2>${esc(title)}</h2>${text ? `<p>${esc(text).replace(/\n/g, '<br>')}</p>` : ''}<div class="ask-b"><button class="btn g" data-no>${esc(cancel)}</button><button class="btn ${danger ? 'dd' : ''}" data-ok>${esc(ok)}</button></div>`;
+    document.body.append(ov, dl);
+    const prev = document.activeElement;
+    const end = v => { ov.remove(); dl.remove(); removeEventListener('keydown', key, true); prev && prev.focus && prev.focus({ preventScroll: true }); res(v); };
+    const key = e => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); end(false); } };
+    addEventListener('keydown', key, true);
+    dl.querySelector('[data-ok]').onclick = () => end(true);
+    dl.querySelector('[data-no]').onclick = () => end(false);
+    ov.onclick = () => end(false);
+    setTimeout(() => dl.querySelector(danger ? '[data-no]' : '[data-ok]').focus(), 30);
+  });
+}
+const DISCARD = { title: '¿Salir sin guardar?', text: 'Lo que has escrito se perderá.', ok: 'Salir sin guardar', cancel: 'Seguir escribiendo', danger: true };
 
 /* ---------- Hojas modales (abajo en móvil, centradas en escritorio). El botón Atrás las cierra. ---------- */
 const stack = [];
@@ -75,7 +107,7 @@ export function sheet({ title, body = '', foot = '', onMount, onClose, wide }) {
   ctl.close = () => { if (!ctl.closed) { ctl.closing = true; if (history.state && history.state.sheet === ctl.id) history.back(); else finish(); } return gone; };
   /** Cierre pedido por el usuario (fuera, X, Esc, arrastrar): si ha escrito algo, pregunta antes de perderlo */
   ctl.dirty = false;
-  ctl.tryClose = () => { if (ctl.dirty && !ctl.saving && !confirm('¿Descartar lo que has escrito?')) return false; ctl.close(); return true; };
+  ctl.tryClose = async () => { if (ctl.dirty && !ctl.saving && !(await ask(DISCARD))) return false; ctl.close(); return true; };
   sh.addEventListener('input', e => { if (e.target.matches('.sh-b input:not([type=search]), .sh-b textarea, .sh-b select')) ctl.dirty = true; });
   sh.addEventListener('change', e => { if (e.target.matches('.sh-b input:not([type=search]), .sh-b textarea, .sh-b select')) ctl.dirty = true; });
   ctl.id = Math.random();
@@ -92,10 +124,15 @@ export function sheet({ title, body = '', foot = '', onMount, onClose, wide }) {
 addEventListener('popstate', () => {
   const top = stack[stack.length - 1]; if (!top) return;
   // Botón Atrás del móvil con datos sin guardar: se pregunta; si cancela, la hoja sigue abierta
-  if (!top.closing && top.dirty && !top.saving && !confirm('¿Descartar lo que has escrito?')) { history.pushState({ sheet: top.id }, ''); return; }
+  if (!top.closing && top.dirty && !top.saving) {
+    // Atrás con algo escrito: la hoja sigue abierta y se pregunta; si decide salir, se cierra de verdad
+    history.pushState({ sheet: top.id }, '');
+    ask(DISCARD).then(go => { if (go) top.close(); });
+    return;
+  }
   top.finish();
 });
-addEventListener('keydown', e => { if (e.key === 'Escape' && stack.length) stack[stack.length - 1].tryClose(); });
+addEventListener('keydown', e => { if (e.key === 'Escape' && stack.length && !document.querySelector('.ask')) stack[stack.length - 1].tryClose(); });
 
 /* Teclado del móvil: la hoja se recoloca encima del teclado (iOS no redimensiona la página) */
 if (window.visualViewport) {
@@ -123,7 +160,7 @@ function dragToClose(sh, ov, close) {
   }, { passive: false });
   sh.addEventListener('touchend', () => {
     if (!on) return; on = false; sh.style.transition = 'transform .2s ease';
-    if (dy > 100) { sh.style.transform = 'translateY(100%)'; setTimeout(() => { if (!close()) { sh.style.transform = ''; ov.style.opacity = ''; } }, 180); }
+    if (dy > 100) { sh.style.transform = 'translateY(100%)'; setTimeout(async () => { if (!(await close())) { sh.style.transform = ''; ov.style.opacity = ''; } }, 180); }
     else { sh.style.transform = ''; ov.style.opacity = ''; }
   }, { passive: true });
 }
@@ -131,7 +168,14 @@ function dragToClose(sh, ov, close) {
 /* ---------- Formularios declarativos ----------
    campos: {k, l (etiqueta), t: text|number|date|select|textarea|switch|section, o: opciones, full, step, min, ph, help, req} */
 export function form(fields, v = {}) {
-  return '<div class="form">' + fields.map(f => {
+  // En modo sencillo, los campos opcionales (adv) van plegados en «Más datos (opcional)»
+  const fold = isSimple(), main = fields.filter(f => !(fold && f.adv)), extra = fold ? fields.filter(f => f.adv) : [];
+  return '<div class="form">' + fieldsHtml(main, v)
+    + (extra.length ? `<details class="more full"><summary>Más datos (opcional)</summary><div class="form">${fieldsHtml(extra, v)}</div></details>` : '')
+    + '<p class="fm err full" data-err hidden role="alert"></p></div>';
+}
+function fieldsHtml(fields, v) {
+  return fields.map(f => {
     if (f.t === 'section') return `<div class="fsec">${esc(f.l)}</div>`;
     if (f.t === 'note') return `<p class="hint full" style="margin-top:-4px">${esc(f.l)}</p>`;
     const val = v[f.k] ?? f.def ?? '', cls = 'fld' + (f.full || f.t === 'textarea' || f.t === 'switch' ? ' full' : '');
@@ -157,7 +201,7 @@ export function form(fields, v = {}) {
         + (f.t === 'date' && f.quick ? `<span class="dq">${[[0, 'Hoy'], [1, 'Ayer'], [2, 'Anteayer']].map(([d, t]) => `<button type="button" data-dq="${d}" data-for="${f.k}">${t}</button>`).join('')}</span>` : '');
     }
     return `<label class="${cls}"><span>${lab}</span>${inp}${help}</label>`;
-  }).join('') + '<p class="fm err full" data-err hidden role="alert"></p></div>';
+  }).join('');
 }
 export function download(name, content, mime) {
   const a = document.createElement('a');

@@ -1,6 +1,6 @@
 // Ajustes por secciones (como en Noticiahz). Cada sección es una función: añadir una nueva es añadir una entrada a SECS.
 import { D, dump, restore, wipe, setKV, getKV, STORES, put, del } from '../db.js';
-import { esc, icon, fKm, fDate, sheet, form, toast, download, ago, undo } from '../ui.js';
+import { esc, icon, fKm, fDate, sheet, form, toast, download, ago, undo, ask } from '../ui.js';
 import { vehicle, prefs, ctx, tasksWithStatus, docsWithStatus, VER, STOP_TIPOS, PREF_DEFAULTS, needsProfilePlan, applyProfilePlan } from '../store.js';
 import { ITV_CAT, PERFIL } from '../perfil.js';
 import { isApp, isIOS, canPrompt, installed, install } from '../install.js';
@@ -46,6 +46,7 @@ export function render(view, [sec]) {
   body.addEventListener('change', async e => {
     const k = e.target.dataset.prefSw; if (!k) return;
     await savePrefs({ [k]: e.target.checked });
+    if (k === 'simple') { toast(e.target.checked ? 'Modo sencillo activado' : 'Modo sencillo desactivado'); refresh(); }
   });
 }
 
@@ -79,7 +80,8 @@ function vehiculo(el) {
 /* ---------- Apariencia ---------- */
 function apariencia(el) {
   const p = prefs(), sel = presetIndex(p);
-  el.innerHTML = set('Tema', 'Automático sigue el modo claro u oscuro del móvil.', seg('theme', [['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']], p.theme))
+  el.innerHTML = set('Modo sencillo', 'Letra y botones más grandes, textos más claros y solo lo esencial a la vista. Recomendado si la app la usa alguien con poca costumbre o con gafas.', `<div class="gc">${sw('simple', 'Modo sencillo', p.simple !== false ? 'Activado' : 'Desactivado: se ve todo, más compacto', p.simple !== false)}</div>`)
+    + set('Tema', 'Automático sigue el modo claro u oscuro del móvil.', seg('theme', [['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']], p.theme))
     + set('Color', 'Se aplica a botones, avisos, logotipo e icono. El contraste se ajusta solo para que el texto siempre se lea.',
       `<div class="sws" id="sws" role="radiogroup" aria-label="Color de la app">${PRESETS.map(([n, h, s], i) => `<button class="swc ${i === sel ? 'on' : ''}" data-i="${i}" style="background:${swatchHex(h, s)}" role="radio" aria-checked="${i === sel}" aria-label="${n}" title="${n}"></button>`).join('')}</div>
        <div class="row" style="border:0;padding:14px 0 0"><div class="m"><b id="swn">${sel >= 0 ? PRESETS[sel][0] : 'Personalizado'}</b><small style="white-space:normal">O elige cualquier color con el selector.</small></div>
@@ -138,11 +140,12 @@ function renamePlace(x, done) {
 function copia(el) {
   const lb = getKV('lastBackup', 0), p = prefs(), n = STORES.reduce((s, k) => s + D[k].length, 0);
   el.innerHTML = set('Copia completa', `Incluye vehículo, plan e historial, viajes, lugares, gastos, documentos y ajustes (${n} registros). <b>${lb ? 'Última copia: ' + ago(lb) : 'Aún no has hecho ninguna.'}</b>`,
-      `<div class="lrs">${lr('bx', 'dl', 'Descargar copia de seguridad', 'Guárdala fuera del móvil: en la nube o en el ordenador')}
+      `<div class="lrs">${canShareFile() ? lr('bs', 'share', 'Enviar copia por WhatsApp o correo', 'Lo más seguro: queda fuera del móvil') : ''}${lr('bx', 'dl', 'Guardar copia en el móvil', 'Se guarda en Descargas')}
       <label class="lr" for="bi">${icon('ul')}<div><b>Restaurar copia</b><small>Sustituye todos los datos por los del archivo</small></div>${icon('right', 'chev')}<input type="file" id="bi" accept=".json,application/json" hidden></label></div>`)
     + set('Recordatorio', '', `<div class="gc">${sw('bkRemind', 'Recordarme hacer copia', 'Aviso en Inicio si pasan 30 días sin copia', p.bkRemind)}</div>`)
     + set('Exportar', 'Para abrir en otras aplicaciones.', `<div class="lrs">${lr('csv', 'doc', 'Gastos en CSV', 'Para Excel o Google Sheets')}${lr('ics', 'cal', 'Avisos en calendario (.ics)', 'Vencimientos y caducidades')}</div>`);
   el.querySelector('#bx').onclick = async () => { await backupJSON(); copia(el); };
+  const bs = el.querySelector('#bs'); if (bs) bs.onclick = async () => { if (await shareBackup()) copia(el); };
   el.querySelector('#bi').onchange = importJSON;
   el.querySelector('#csv').onclick = exportCSV;
   el.querySelector('#ics').onclick = exportICS;
@@ -174,23 +177,56 @@ function avanzado(el) {
   })();
   const ib = el.querySelector('#insb'); if (ib) ib.onclick = async () => { await install(); avanzado(el); };
   el.querySelector('#rp').onclick = async () => {
-    if (!confirm('¿Volver a los ajustes iniciales (tema, color, texto, avisos y rutas)?')) return;
+    if (!(await ask({ title: '¿Volver a los ajustes iniciales?', text: 'Tema, color, tamaño de letra, avisos y rutas. Tus datos no se tocan.', ok: 'Sí, restablecer', cancel: 'No' }))) return;
     await setKV('prefs', {}); await savePrefs({ ...PREF_DEFAULTS, ah: undefined, as: undefined }); toast('Ajustes restablecidos'); avanzado(el);
   };
   el.querySelector('#rst').onclick = async () => {
-    if (!confirm('Se borrarán el vehículo, el plan, el historial, los viajes, los gastos y los documentos de este dispositivo. No se puede deshacer.\n\nSi quieres conservarlos, cancela y haz antes una copia de seguridad.\n\n¿Borrar todo?')) return;
-    if (prompt('Para confirmar, escribe BORRAR') !== 'BORRAR') return toast('Cancelado: no se ha borrado nada');
+    if (!(await ask({ title: '¿Borrar todos los datos?', text: 'Se borrarán la autocaravana, el plan, el historial, los viajes, los gastos y los documentos de este móvil. No se puede deshacer.\n\nSi quieres conservarlos, haz antes una copia de seguridad.', ok: 'Sí, borrar todo', cancel: 'No, volver', danger: true }))) return;
+    if (!(await ask({ title: '¿Seguro del todo?', text: 'Es la última pregunta. Después no hay forma de recuperarlos.', ok: 'Borrar definitivamente', cancel: 'No, volver', danger: true }))) return toast('No se ha borrado nada');
     await wipe(); try { localStorage.removeItem('cz_pf'); } catch (e) {}
     location.hash = '#/inicio'; location.reload();
   };
 }
 
 /* ---------- Copias y exportaciones (también se usan desde Inicio) ---------- */
+const backupData = () => ({ name: `caravanahz-copia-${isoToday()}.json`, text: JSON.stringify({ app: 'caravanahz', v: 1, exported: new Date().toISOString(), data: dump() }) });
+/** ¿Puede el móvil compartir archivos (Android: WhatsApp, Gmail, Drive…)? */
+export const canShareFile = () => { try { return !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.json', { type: 'application/json' })] })); } catch (e) { return false; } };
+
+/** Guardar la copia como archivo en el móvil (Descargas) */
 export async function backupJSON() {
-  const j = { app: 'caravanahz', v: 1, exported: new Date().toISOString(), data: dump() };
-  download(`caravanahz-copia-${isoToday()}.json`, JSON.stringify(j), 'application/json');
+  const b = backupData();
+  download(b.name, b.text, 'application/json');
   await setKV('lastBackup', Date.now());
-  toast('Copia descargada: guárdala fuera del móvil');
+  toast('Copia guardada en Descargas. Mejor si además la envías a otro sitio');
+}
+/** Enviar la copia por WhatsApp, correo o Drive: así no se pierde si se pierde el móvil */
+export async function shareBackup() {
+  const b = backupData(), f = new File([b.text], b.name, { type: 'application/json' });
+  try {
+    await navigator.share({ files: [f], title: 'Copia de Caravanahz', text: 'Copia de seguridad de Caravanahz. Guárdala: con ella se recuperan todos los datos.' });
+    await setKV('lastBackup', Date.now()); toast('Copia enviada');
+    return true;
+  } catch (e) {
+    if (e && e.name === 'AbortError') return false; // ha cancelado
+    await backupJSON(); return true;
+  }
+}
+/** Elegir cómo hacer la copia (lo más sencillo primero) */
+export function backupSheet(done) {
+  const share = canShareFile();
+  sheet({
+    title: 'Hacer copia de seguridad',
+    body: `<p class="hint" style="margin-bottom:14px">Tus datos solo están en este móvil. Con la copia se recuperan si el móvil se pierde, se rompe o lo cambias.</p>
+      <div class="qa" style="grid-template-columns:1fr">
+        ${share ? `<button data-s>${icon('share')}<b>Enviarla por WhatsApp o correo</b><small>Mándatela a ti mismo o a un familiar. Lo más seguro.</small></button>` : ''}
+        <button data-d>${icon('dl')}<b>Guardarla en el móvil</b><small>Queda en la carpeta Descargas</small></button>
+      </div>`,
+    onMount: s => {
+      const sb = s.el.querySelector('[data-s]'); if (sb) sb.onclick = async () => { await s.close(); if (await shareBackup()) done && done(); };
+      s.el.querySelector('[data-d]').onclick = async () => { await s.close(); await backupJSON(); done && done(); };
+    }
+  });
 }
 
 /* Validación de la copia: solo entran objetos con forma conocida */
@@ -217,7 +253,7 @@ async function importJSON(e) {
   let j; try { j = JSON.parse(await f.text()); } catch (x) { return toast('El archivo no es una copia válida'); }
   const r = clean(j); if (!r) return toast('No es una copia de Caravanahz');
   const o = r.out;
-  if (!confirm(`Copia del ${isNaN(r.date) ? '¿?' : r.date.toLocaleDateString('es-ES')}:\n• ${o.tasks.length} tareas y ${o.services.length} registros de mantenimiento\n• ${o.trips.length} viajes\n• ${o.expenses.length} gastos y ${o.docs.length} documentos\n\nSe SUSTITUYEN todos los datos actuales. ¿Continuar?`)) return;
+  if (!(await ask({ title: '¿Restaurar esta copia?', text: `Copia del ${isNaN(r.date) ? '¿?' : r.date.toLocaleDateString('es-ES')}:\n• ${o.tasks.length} tareas y ${o.services.length} mantenimientos\n• ${o.trips.length} viajes\n• ${o.expenses.length} gastos y ${o.docs.length} documentos\n\nSe SUSTITUYEN todos los datos de este móvil.`, ok: 'Sí, restaurar', cancel: 'No', danger: true }))) return;
   await restore(o);
   await savePrefs({}); toast('Copia restaurada'); go('inicio');
 }

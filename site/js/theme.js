@@ -7,7 +7,7 @@ export const PRESETS = [
   ['Esmeralda', null, null], ['Turquesa', 185, .85], ['Azul', 214, .9], ['Índigo', 243, .8], ['Violeta', 272, .7],
   ['Rosa', 328, .75], ['Coral', 6, .85], ['Naranja', 27, .95], ['Ámbar', 42, .95], ['Oliva', 80, .55], ['Grafito', 215, .12],
 ];
-export const FONT_SIZES = [['0.9', 'Pequeño'], ['1', 'Normal'], ['1.12', 'Grande'], ['1.25', 'Muy grande']];
+export const FONT_SIZES = [['1', 'Normal'], ['1.12', 'Grande'], ['1.25', 'Muy grande'], ['1.4', 'Enorme']];
 
 const sysDark = () => matchMedia('(prefers-color-scheme: dark)').matches;
 const ESMERALDA = '#059669';
@@ -40,13 +40,14 @@ export function applyLook(p = prefs()) {
   const acc = window.czApply ? window.czApply(p.ah, p.as) : null;
   root.style.setProperty('--fs', p.fs || 1);
   root.classList.toggle('rm', !!p.reduceMotion);
+  root.classList.toggle('simple', p.simple !== false);
   document.querySelector('meta[name=theme-color]').content = dark ? '#0d1523' : acc ? acc.barL : '#047857';
   // Favicon con el color elegido
   const col = acc ? acc.fav : ESMERALDA;
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='15' fill='${col}'/><path d='M12 42V24a4 4 0 0 1 4-4h22l8 9h4a3 3 0 0 1 3 3v10' fill='none' stroke='%2306150f' stroke-width='5' stroke-linejoin='round'/><circle cx='21' cy='44' r='4.5' fill='white'/><circle cx='43' cy='44' r='4.5' fill='white'/><path d='M17 26h12v7H17z' fill='white'/></svg>`;
   document.querySelector('link[rel=icon]').href = 'data:image/svg+xml,' + svg.replace(/#/g, '%23');
   const th = document.querySelector('#th use'); if (th) th.setAttribute('href', dark ? '#i-sun' : '#i-moon');
-  try { localStorage.setItem('cz_pf', JSON.stringify({ th: p.theme, ah: p.ah, as: p.as, fs: p.fs, rm: !!p.reduceMotion })); } catch (e) {}
+  try { localStorage.setItem('cz_pf', JSON.stringify({ th: p.theme, ah: p.ah, as: p.as, fs: p.fs, rm: !!p.reduceMotion, sm: p.simple !== false })); } catch (e) {}
 }
 
 export async function savePrefs(patch) {

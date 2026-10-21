@@ -1,6 +1,6 @@
 // Combustible: cuánto gastas en gasóleo, no solo cuántos litros. Pestaña dentro de Gastos.
 import { D } from '../db.js';
-import { esc, icon, fKm, fDate, fEur, fEur0, fNum, fPpl } from '../ui.js';
+import { esc, icon, fKm, fDate, fEur, fEur0, fNum, fPpl, uL100, isSimple } from '../ui.js';
 import { vehicle } from '../store.js';
 import { consumption, fuelStats, kmBetween, isoToday, addMonths } from '../logic.js';
 import { expenseSheet } from '../forms.js';
@@ -65,7 +65,7 @@ export function renderFuel(el) {
     <div class="kpis">
       <div class="kpi"><span class="l">${icon('euro')}Gasto en gasóleo</span><span class="v">${fEur0(st.eur)}</span><span class="s">${st.n} ${st.n === 1 ? 'repostaje' : 'repostajes'} ${r.txt}</span></div>
       <div class="kpi"><span class="l">${icon('map')}Coste por kilómetro</span><span class="v">${eurKm ? fPpl(eurKm) + ' €/km' : '—'}</span><span class="s">${km ? 'en ' + fKm(km) + ' recorridos' : 'Faltan km registrados'}</span></div>
-      <div class="kpi"><span class="l">${icon('fuel')}Cada 100 km</span><span class="v">${e100 ? fEur(e100) : '—'}</span><span class="s">${l100 ? fNum(l100) + ' L/100 km' : 'Necesito dos llenos con km'}</span></div>
+      <div class="kpi"><span class="l">${icon('fuel')}Cada 100 km</span><span class="v">${e100 ? fEur(e100) : '—'}</span><span class="s">${l100 ? fNum(l100) + uL100() : 'Necesito dos llenos con km'}</span></div>
       <div class="kpi"><span class="l">${icon('gauge')}Precio medio</span><span class="v">${st.avgPrice ? fPpl(st.avgPrice) + ' €' : '—'}</span><span class="s">${st.min && st.max && st.min !== st.max ? `por litro · de ${fPpl(st.min.ppl)} a ${fPpl(st.max.ppl)}` : 'por litro'}</span></div>
       <div class="kpi"><span class="l">${icon('fuel')}Litros</span><span class="v">${fNum(st.litros, 0)} L</span><span class="s">${r.txt}</span></div>
       <div class="kpi"><span class="l">${icon('gps')}Autonomía</span><span class="v">${autonomia ? '≈ ' + fKm(Math.round(autonomia / 10) * 10) : '—'}</span><span class="s">${autonomia ? `con ${dep} L y tu consumo` : dep ? 'falta tu consumo medio' : 'indica el depósito en Ajustes'}</span></div>
@@ -76,7 +76,7 @@ export function renderFuel(el) {
       <div class="card"><div class="sec"><h2>Precio del litro (€)</h2></div>${priceChart(st.prices)}
         ${st.min && st.max && st.min !== st.max ? `<p class="hint" style="margin-top:8px">Más barato: ${fPpl(st.min.ppl)} € (${fDate(st.min.fecha)}${st.min.concepto ? ', ' + esc(st.min.concepto) : ''}) · más caro: ${fPpl(st.max.ppl)} € (${fDate(st.max.fecha)}${st.max.concepto ? ', ' + esc(st.max.concepto) : ''})</p>` : ''}</div>
     </div>` : ''}
-    ${tram.length ? `<div class="card" style="margin-bottom:18px"><div class="sec"><h2>Coste real cada 100 km, por tramo de lleno a lleno</h2></div>
+    ${tram.length ? `<div class="card" style="margin-bottom:18px"><div class="sec"><h2>${isSimple() ? 'Lo que te cuestan 100 km, entre llenado y llenado' : 'Coste real cada 100 km, por tramo de lleno a lleno'}</h2></div>
       <div class="bars" role="img" aria-label="Euros cada 100 km por tramo">${tram.map(x => `<div class="c" tabindex="0" title="${fDate(x.fecha)}: ${fEur(x.eur100)} cada 100 km · ${fNum(x.l100)} L/100 · ${fKm(x.kmTramo)}"><em>${fNum(x.eur100, 1)}</em><i style="height:${Math.max(3, Math.round(x.eur100 / maxT * 110))}px"></i><span>${fDate(x.fecha, { day: 'numeric', month: 'numeric' })}</span></div>`).join('')}</div></div>` : ''}
     ${list.length ? `<div class="gh"><span>Repostajes ${r.txt}</span><span>${fEur(st.eur)}</span></div><div class="list">${list.map(e => {
       const t = tramoDe.get(e.fecha + '|' + (+e.km)), ppl = +e.litros > 0 ? +e.importe / +e.litros : null;

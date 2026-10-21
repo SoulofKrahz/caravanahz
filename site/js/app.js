@@ -24,13 +24,16 @@ route('stats', stats.render);
 function nav(active) {
   const n = alertCount();
   const act = active === 'viaje' ? 'viajes' : active;
-  const html = cls => NAV.map(([k, l, i]) =>
-    `<a href="#/${k}" class="${k === act ? 'on' : ''}" ${k === act ? 'aria-current="page"' : ''}>${icon(i)}<span>${l}</span>${cls && k === 'mant' && n ? `<b>${n}</b>` : ''}</a>`).join('');
+  const simple = prefs().simple !== false;
+  const html = cls => NAV.map(([k, l, i, ls]) =>
+    `<a href="#/${k}" class="${k === act ? 'on' : ''}" ${k === act ? 'aria-current="page"' : ''}>${icon(i)}<span>${simple ? ls : l}</span>${cls && k === 'mant' && n ? `<b aria-label="${n} avisos">${n}</b>` : ''}</a>`).join('');
   $('#topnav').innerHTML = html(false);
   $('#bb').innerHTML = html(true);
   const cfg = $('#cfg'); cfg.classList.toggle('on', active === 'ajustes'); if (active === 'ajustes') cfg.setAttribute('aria-current', 'page'); else cfg.removeAttribute('aria-current');
   // El botón + solo tiene sentido con el vehículo configurado y fuera de Ajustes
-  $('#fab').hidden = !getKV('setup', false) || active === 'ajustes';
+  // En modo sencillo, Inicio ya tiene sus botones grandes: allí no hace falta
+  $('#fab').hidden = !getKV('setup', false) || active === 'ajustes' || (simple && active === 'inicio');
+  document.body.classList.toggle('has-fab', !$('#fab').hidden);
   document.title = (n ? `(${n}) ` : '') + 'Caravanahz';
 }
 onRender(nav);
@@ -38,7 +41,7 @@ onRender(nav);
 $('#fab').onclick = quickAdd;
 // El botón + se aparta al bajar (para no tapar cifras) y vuelve al subir
 let lastY = 0;
-addEventListener('scroll', () => { const y = scrollY, f = $('#fab'); if (Math.abs(y - lastY) < 8) return; f.classList.toggle('off', y > lastY && y > 120); lastY = y; }, { passive: true });
+addEventListener('scroll', () => { const y = scrollY, f = $('#fab'); if (Math.abs(y - lastY) < 8) return; f.classList.toggle('off', prefs().simple === false && y > lastY && y > 120); lastY = y; }, { passive: true });
 onRender(() => $('#fab').classList.remove('off'));
 
 /* Tema rápido desde la cabecera (el resto de la apariencia está en Ajustes → Apariencia) */

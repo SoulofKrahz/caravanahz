@@ -1,5 +1,5 @@
 import { D, put, del } from '../db.js';
-import { esc, icon, fKm, fDate, fEur, rel, stChip, sheet, toast, undo, fNum } from '../ui.js';
+import { esc, icon, fKm, fDate, fEur, rel, stChip, sheet, toast, undo, fNum, isSimple } from '../ui.js';
 import { ctx, tasksWithStatus, ZONA_ICO, vehicle } from '../store.js';
 import { FUENTE_TXT } from '../perfil.js';
 import { normKey } from '../valid.js';
@@ -28,7 +28,8 @@ function dueTxt(s) {
 export function render(view, params) {
   if (params[0] === 'completar') return completar(view);
   const c = ctx(), tw = tasksWithStatus(c);
-  const groups = [['over', 'Vencido'], ['soon', 'Próximo'], ['nd', 'Sin datos'], ['ok', 'Al día']];
+  const simple = isSimple();
+  const groups = simple ? [['over', 'Toca ya'], ['soon', 'Pronto'], ['nd', 'Falta saber cuándo se hizo'], ['ok', 'Al día']] : [['over', 'Vencido'], ['soon', 'Próximo'], ['nd', 'Sin datos'], ['ok', 'Al día']];
   const hist = D.services.slice().sort((a, b) => b.fecha.localeCompare(a.fecha) || (+b.km || 0) - (+a.km || 0));
 
   const row = ({ t, s }) => `<button class="row" data-t="${t.id}"><span class="ico">${icon(ZONA_ICO[t.zona] || 'wrench')}</span>
@@ -52,8 +53,8 @@ export function render(view, params) {
           `<button class="row" data-h="${h.id}"><span class="ico">${icon(ZONA_ICO[h.zona] || 'wrench')}</span><span class="m"><b>${esc(h.nombre)}</b><small>${fDate(h.fecha)}${h.km ? ' · ' + fKm(h.km) : ''}${h.taller ? ' · ' + esc(h.taller) : ''}</small></span><span class="r">${h.coste ? `<b>${fEur(h.coste)}</b>` : ''}</span></button>`).join('') + '</div>'; }).join('');
   }
 
-  view.innerHTML = `<div class="vh"><div><h1>Mantenimiento</h1><p>${fKm(c.km)} · ${tw.filter(x => x.s.state === 'over').length} vencidas · ${tw.filter(x => x.s.state === 'soon').length} próximas</p></div></div>
-    <div class="tools"><div class="seg" id="seg"><button data-v="plan" class="${tab === 'plan' ? 'on' : ''}">Plan</button><button data-v="hist" class="${tab === 'hist' ? 'on' : ''}">Historial ${hist.length}</button></div>
+  view.innerHTML = `<div class="vh"><div><h1>${simple ? 'Revisiones' : 'Mantenimiento'}</h1><p>${simple ? `${tw.filter(x => x.s.state === 'over').length} tocan ya · ${tw.filter(x => x.s.state === 'soon').length} pronto` : `${fKm(c.km)} · ${tw.filter(x => x.s.state === 'over').length} vencidas · ${tw.filter(x => x.s.state === 'soon').length} próximas`}</p></div></div>
+    <div class="tools"><div class="seg" id="seg"><button data-v="plan" class="${tab === 'plan' ? 'on' : ''}">${simple ? 'Qué toca' : 'Plan'}</button><button data-v="hist" class="${tab === 'hist' ? 'on' : ''}">${simple ? 'Lo hecho' : 'Historial'} ${hist.length}</button></div>
     <button class="btn" id="add">${icon('plus')}${tab === 'plan' ? 'Tarea' : 'Reparación'}</button></div>
     ${body}<div class="pb"></div>`;
 

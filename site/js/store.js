@@ -4,7 +4,7 @@ import { normKey } from './valid.js';
 import { currentKm, kmRate, taskStatus, docStatus, isoToday, RANK } from './logic.js';
 
 export const APP = 'Caravanahz';
-export const VER = '2026-10-21-1';
+export const VER = '2026-10-21-2';
 
 export const ZONAS = ['Motor', 'Chasis y frenos', 'Neumáticos', 'Célula', 'Gas', 'Agua', 'Electricidad', 'Seguridad', 'Otros'];
 export const ZONA_ICO = { Motor: 'gauge', 'Chasis y frenos': 'wrench', Neumáticos: 'gps', Célula: 'van', Gas: 'fuel', Agua: 'fuel', Electricidad: 'gauge', Seguridad: 'alert', Otros: 'wrench' };
@@ -64,7 +64,7 @@ export async function applyProfilePlan() {
 }
 
 export const vehicle = () => getKV('vehicle', {});
-export const PREF_DEFAULTS = { warnDays: 30, warnKm: 1000, timeFactor: PERFIL.ritmo, theme: 'auto', fs: 1, start: 'inicio', mapGray: false, reduceMotion: false, bkRemind: true, showNd: true, defStop: 'visita' };
+export const PREF_DEFAULTS = { warnDays: 30, warnKm: 1000, timeFactor: PERFIL.ritmo, theme: 'auto', fs: 1.12, simple: true, start: 'inicio', mapGray: false, reduceMotion: false, bkRemind: true, showNd: true, defStop: 'visita' };
 export const prefs = () => Object.assign({}, PREF_DEFAULTS, getKV('prefs', {}));
 
 /** Contexto común para calcular estados */

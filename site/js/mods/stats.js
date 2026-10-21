@@ -1,6 +1,6 @@
 // Estadísticas: análisis de todo lo apuntado. Gastos es para apuntar y consultar; esto es para entender.
 import { D } from '../db.js';
-import { esc, icon, fKm, fDate, fEur, fEur0, fNum, fPpl } from '../ui.js';
+import { esc, icon, fKm, fDate, fEur, fEur0, fNum, fPpl, isSimple, uL100 } from '../ui.js';
 import { ctx, tasksWithStatus, NIGHT, ZONA_ICO } from '../store.js';
 import {
   isoToday, addMonths, kmBetween, consumption, fuelStats, tripCost, eur100Of,
@@ -55,7 +55,14 @@ const dTxt = (d, inverse) => {
   return `<span class="dl ${up || dn ? (good ? 'g' : 'b') : 'nd'}">${up ? '▲' : dn ? '▼' : '='} ${fNum(Math.abs(d), 0)} %</span>`;
 };
 
+/** Modo sencillo: el gasto por mes como lista legible (mes, importe y barra) en vez del gráfico apilado */
+function monthList(rows, unit) {
+  const max = Math.max(...rows.map(r => r.total), 1);
+  return `<div class="hbars">${rows.slice().reverse().map(r => `<div class="hb"><b>${unit === 'm' ? MES[+r.k.slice(5, 7) - 1][0].toUpperCase() + MES[+r.k.slice(5, 7) - 1].slice(1) + ' ' + r.k.slice(0, 4) : r.k}</b><span>${fEur0(r.total)}${r.km ? ' · ' + fKm(r.km) : ''}</span><div class="t"><i style="width:${r.total / max * 100}%"></i></div></div>`).join('')}</div>`;
+}
+
 export function render(view) {
+  const simple = isSimple();
   const years = [...new Set([String(new Date().getFullYear()), ...[...D.expenses.map(e => e.fecha), ...D.trips.map(t => t.inicio), ...D.odo.map(o => o.fecha)].filter(Boolean).map(f => f.slice(0, 4))])].sort().reverse();
   if (!years.includes(year)) year = years[0];
   const r = rango(), today = isoToday();
@@ -110,7 +117,7 @@ export function render(view) {
   const pernTot = pern.area + pern.camping + pern.libre;
 
   const g = cb.grupos, gTot = cb.total || 1, maxCat = cb.cats.length ? cb.cats[0][1] : 1;
-  view.innerHTML = `<div class="vh"><div><h1>Estadísticas</h1><p>${esc(r.txt[0].toUpperCase() + r.txt.slice(1))}</p></div></div>
+  view.innerHTML = `<div class="vh"><div><h1>${simple ? 'Resumen' : 'Estadísticas'}</h1><p>${esc(r.txt[0].toUpperCase() + r.txt.slice(1))}</p></div></div>
     <div class="tools"><div class="seg" id="per">${[['anio', 'Año'], ['12m', '12 meses'], ['todo', 'Todo']].map(([k, l]) => `<button data-v="${k}" class="${periodo === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       ${periodo === 'anio' ? `<select id="yr" aria-label="Año">${years.map(y => `<option ${y === year ? 'selected' : ''}>${y}</option>`).join('')}</select>` : ''}</div>
     ${!cb.n && !km && !tripsIn.length ? `<div class="empty"><h3>Sin datos ${esc(r.txt)}</h3><p>En cuanto apuntes repostajes, gastos o viajes verás aquí cuánto te cuesta tu autocaravana y cómo la usas.</p></div>` : `
@@ -129,14 +136,14 @@ export function render(view) {
         <div class="legv">${GRUPOS.map(([k, l, cats]) => `<div><i class="sw-${k}"></i><span><b>${l}</b><small>${cats.join(', ')}</small></span><span class="n"><b>${fEur0(g[k])}</b><small>${cb.total ? Math.round(g[k] / gTot * 100) : 0} %</small></span></div>`).join('')}</div>
         <p class="hint" style="margin-top:10px">${g.fijos && cb.total ? `Lo fijo (seguro e impuestos) es el ${Math.round(g.fijos / gTot * 100)} %: lo pagas aunque no salgas. Cuantos más km hagas, menos pesa por km.` : 'Añade seguro e impuestos para ver el coste fijo.'}</p>
         <div class="hbars" style="margin-top:14px">${cb.cats.map(([c, v]) => `<div class="hb"><b>${esc(c)}</b><span>${fEur0(v)} · ${Math.round(v / gTot * 100)} %</span><div class="t"><i style="width:${v / maxCat * 100}%"></i></div></div>`).join('')}</div>`)}
-      ${card(`Gasto por ${unit === 'm' ? 'mes' : 'año'}`, stacked(ser, unit) + table([unit === 'm' ? 'Mes' : 'Año', ...GRUPOS.map(x => x[1]), 'Total', 'Km'], ser.map(x => [unit === 'm' ? MES[+x.k.slice(5, 7) - 1] + ' ' + x.k.slice(0, 4) : x.k, ...GRUPOS.map(([k]) => fEur0(x[k])), `<b>${fEur0(x.total)}</b>`, fNum(x.km, 0)])))}
+      ${simple ? card(`Gasto por ${unit === 'm' ? 'mes' : 'año'}`, monthList(ser, unit)) : card(`Gasto por ${unit === 'm' ? 'mes' : 'año'}`, stacked(ser, unit) + table([unit === 'm' ? 'Mes' : 'Año', ...GRUPOS.map(x => x[1]), 'Total', 'Km'], ser.map(x => [unit === 'm' ? MES[+x.k.slice(5, 7) - 1] + ' ' + x.k.slice(0, 4) : x.k, ...GRUPOS.map(([k]) => fEur0(x[k])), `<b>${fEur0(x.total)}</b>`, fNum(x.km, 0)])))}
     </div>
 
     <div class="grid2">
-      ${card(`Kilómetros por ${unit === 'm' ? 'mes' : 'año'}`, simpleBars(ser, unit, x => x.km, v => fNum(v, 0)) + `<p class="hint" style="margin-top:8px">Calculado con todos los datos del cuentakilómetros: repostajes, mantenimientos, viajes y lecturas.</p>`)}
+      ${simple ? '' : card(`Kilómetros por ${unit === 'm' ? 'mes' : 'año'}`, simpleBars(ser, unit, x => x.km, v => fNum(v, 0)) + `<p class="hint" style="margin-top:8px">Calculado con todos los datos del cuentakilómetros: repostajes, mantenimientos, viajes y lecturas.</p>`)}
       ${card('Gasóleo', `<div class="mini">
           <div><small>Gastado</small><b>${fEur0(fs.eur)}</b></div><div><small>Litros</small><b>${fNum(fs.litros, 0)} L</b></div>
-          <div><small>Cada 100 km</small><b>${e100 ? fEur(e100) : '—'}</b></div><div><small>Consumo</small><b>${l100 ? fNum(l100) + ' L/100' : '—'}</b></div>
+          <div><small>Cada 100 km</small><b>${e100 ? fEur(e100) : '—'}</b></div><div><small>Consumo</small><b>${l100 ? fNum(l100) + (simple ? ' L' : ' L/100') : '—'}</b>${simple && l100 ? '<small>litros cada 100 km</small>' : ''}</div>
           <div><small>Precio medio</small><b>${fs.avgPrice ? fPpl(fs.avgPrice) + ' €/L' : '—'}</b></div><div><small>Peso en el gasto</small><b>${cb.total ? Math.round(fs.eur / gTot * 100) + ' %' : '—'}</b></div>
         </div><a class="lnk" style="margin:12px 0 0" href="#/gastos/combustible">${icon('fuel')}Detalle de repostajes y precio del litro${icon('right')}</a>`)}
     </div>
