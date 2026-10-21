@@ -228,7 +228,7 @@ export async function renderTrip(view, [id]) {
       return `<div class="stop" data-i="${i}"><span class="n" style="${NIGHT.has(s.tipo) ? 'background:#22395a' : ''}">${i + 1}</span>
         <div class="m"><input value="${esc(s.label)}" maxlength="60" data-l aria-label="Nombre de la parada ${i + 1}"><small><span>${seg}</span>
           <select data-ty aria-label="Tipo">${STOP_TIPOS.map(([k, l]) => `<option value="${k}" ${s.tipo === k ? 'selected' : ''}>${l}</option>`).join('')}</select></small></div>
-        <button class="ib ${fav ? 'on' : ''}" data-fv aria-label="${fav ? 'Quitar de mis lugares' : 'Guardar en mis lugares'}" title="Mis lugares">${icon('star')}</button>
+        <button class="ib ${fav ? 'fav' : ''}" data-fv aria-label="${fav ? 'Quitar de mis lugares' : 'Guardar en mis lugares'}" title="Mis lugares">${icon('star')}</button>
         <button class="ib" data-u ${i ? '' : 'disabled'} aria-label="Subir">${icon('up')}</button>
         <button class="ib" data-d ${i < t.paradas.length - 1 ? '' : 'disabled'} aria-label="Bajar">${icon('down')}</button>
         <button class="ib" data-x aria-label="Quitar">${icon('x')}</button></div>`;

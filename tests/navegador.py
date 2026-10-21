@@ -60,7 +60,7 @@ with sync_playwright() as p:
     # gasto
     pg.click('#qf'); pg.wait_for_timeout(300)
     pg.click('.sheet [data-save]'); pg.wait_for_timeout(200)
-    t=pg.locator('.sheet .er').all_inner_texts(); ok(any('importe' in x.lower() for x in t),'gasto sin importe -> '+str(t))
+    t=pg.locator('.sheet .er').all_inner_texts(); ok(any('pagado' in x.lower() or 'importe' in x.lower() for x in t),'gasto sin importe -> '+str(t))
     pg.fill('.sheet [name=importe]','80'); pg.fill('.sheet [name=litros]','10'); pg.fill('.sheet [name=km]','145200'); pg.click('.sheet [data-save]'); pg.wait_for_timeout(200)
     t=pg.locator('.sheet .er').all_inner_texts(); ok(any('€/L' in x for x in t),'precio por litro absurdo -> '+str(t))
     pg.screenshot(path=OUT+'06-gasto-error.png')

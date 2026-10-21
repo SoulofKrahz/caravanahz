@@ -55,10 +55,10 @@ export function expenseSheet(e = {}, preset = {}) {
     { k: 'fecha', l: 'Fecha', ...pastDate({ req: 'Indica la fecha' }) },
     { k: 'cat', l: 'Categoría', t: 'select', o: CATS, req: true },
     { k: 'litros', l: 'Litros', t: 'number', fuel: 1, min: 1, max: dep ? Math.ceil(dep * 1.1) : 300, dec: 2, help: dep ? `Tu depósito: ${dep} L` : '' },
-    { k: 'ppl', l: 'Precio por litro (€)', t: 'number', fuel: 1, dec: 3, check: v => (v < 0.7 || v > 3.5 ? `${fPpl(v)} €/L no es un precio normal de gasóleo: revisa los litros o el importe` : null), help: lastP ? `La última vez: ${fPpl(lastP)} €/L` : 'Lo ves en el surtidor o en el ticket' },
-    { k: 'importe', l: 'Importe total (€)', t: 'number', req: 'Indica el importe', ...R.money(50000), help: 'Con litros y precio se calcula solo' },
-    { k: 'km', l: 'Kilómetros del cuentakilómetros', t: 'number', int: true, ...R.km, help: 'Necesario para calcular el consumo y el €/km' },
-    { k: 'lleno', l: 'Depósito lleno', t: 'switch', help: 'El consumo y el coste por km se calculan de lleno a lleno', fuel: 1 },
+    { k: 'ppl', l: 'Precio por litro (€)', t: 'number', fuel: 1, dec: 3, check: v => (v < 0.7 || v > 3.5 ? `${fPpl(v)} €/L no es un precio normal de gasóleo: revisa los litros o el importe` : null), help: lastP ? `La última vez: ${fPpl(lastP)} € el litro` : 'Lo pone en el surtidor o en el ticket' },
+    { k: 'importe', l: 'Total pagado (€)', t: 'number', req: 'Indica cuánto has pagado', ...R.money(50000), help: 'Si pones los litros y el precio, se calcula solo' },
+    { k: 'km', l: 'Kilómetros del cuentakilómetros', t: 'number', int: true, ...R.km, help: 'Los que marca el salpicadero. Sirven para saber cuánto gastas' },
+    { k: 'lleno', l: 'He llenado el depósito', t: 'switch', help: 'Déjalo marcado si has llenado hasta arriba. Así se calcula bien cuánto gasta', fuel: 1 },
     { k: 'concepto', l: 'Concepto', ph: 'Ej. Repsol Lleida, peaje AP-7…', maxLen: 80, sug: used(D.expenses.filter(x => x.cat === e.cat), 'concepto') },
     { k: 'viajeId', adv: 1, l: 'Viaje', t: 'select', o: trips },
     { k: 'notas', adv: 1, l: 'Notas', t: 'textarea', maxLen: 1000 },
@@ -86,9 +86,9 @@ export function expenseSheet(e = {}, preset = {}) {
           const ppl = v.importe / v.litros;
           if (ppl < 0.7 || ppl > 3.5) er.push({ k: 'importe', msg: `Sale a ${fPpl(ppl)} €/L: revisa el importe o los litros` });
           else if (v.ppl && Math.abs(v.ppl * v.litros - v.importe) > Math.max(0.05, v.importe * 0.01)) er.push({ k: 'importe', msg: `${fNum(v.litros, 2)} L a ${fPpl(v.ppl)} €/L son ${fNum(v.litros * v.ppl, 2)} €, no ${fNum(v.importe, 2)} €` });
-          if (v.lleno && !v.km) er.push({ k: 'km', msg: 'Para calcular el consumo de un lleno necesito los km. Si no los sabes, desmarca «Depósito lleno».' });
+          if (v.lleno && !v.km) er.push({ k: 'km', msg: 'Para calcular el consumo de un lleno necesito los km. Si no los sabes, desmarca «He llenado el depósito».' });
         }
-        if (v.cat === 'Combustible' && !v.litros && v.lleno) er.push({ k: 'litros', msg: 'Indica los litros o desmarca «Depósito lleno»' });
+        if (v.cat === 'Combustible' && !v.litros && v.lleno) er.push({ k: 'litros', msg: 'Indica los litros o desmarca «He llenado el depósito»' });
         if (v.viajeId) { const t = D.trips.find(x => x.id === v.viajeId); if (t && t.inicio && v.fecha < addDays(t.inicio, -60)) er.push({ k: 'viajeId', adv: 1, msg: `El viaje empieza el ${fDate(t.inicio)}: ¿es el viaje correcto?` }); }
         return er;
       }, async v => {

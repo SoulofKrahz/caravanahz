@@ -126,6 +126,9 @@ async function run(browser, label, viewport, mobile) {
   await p.goto(BASE + '#/ajustes/apariencia'); await p.waitForTimeout(300);
   await p.click('[data-pref=theme] [data-v=dark]'); await p.waitForTimeout(200);
   ok(await p.evaluate(() => document.documentElement.dataset.theme) === 'dark', 'tema oscuro');
+  // El engranaje de Ajustes activo se ve como los demás iconos (antes se rellenaba de naranja)
+  const cfg = await p.evaluate(() => { const svg = document.querySelector('#cfg svg'), cs = getComputedStyle(svg); return { fill: cs.fill, color: cs.color, em: getComputedStyle(document.documentElement).getPropertyValue('--em').trim() }; });
+  ok(cfg.fill === 'none', 'icono de Ajustes activo sin relleno (' + cfg.fill + ')');
 
   ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await ctx.close();
