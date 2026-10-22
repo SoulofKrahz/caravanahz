@@ -98,6 +98,13 @@ async function run(browser, label, viewport, mobile) {
   await p.goto(BASE + '#/stats'); await p.waitForTimeout(400);
   ok((await p.innerText('.kpis')).replace(/\u00a0/g, ' ').includes('850 km'), 'Estadísticas cuenta los km del día (repostajes + viaje de hoy: 850 km)');
 
+  // 4c) Inicio enseña el próximo viaje con fecha aunque haya otro sin fecha (antes este le quitaba el sitio)
+  await p.goto(BASE + '#/viajes'); await p.waitForTimeout(300);
+  await p.click('#add'); await p.waitForTimeout(300); await p.fill('.sheet [name=nombre]', 'Sin fecha aún'); await save(); await p.waitForTimeout(900);
+  await p.goto(BASE + '#/inicio'); await p.waitForTimeout(400);
+  const vi = await p.innerText('.sec:has(h2:has-text("Viajes"))');
+  ok(vi.includes('Picos') && /Próximo · sales en/.test(vi) && vi.includes('1 viaje sin fecha'), 'Inicio: el próximo viaje con fecha sale aunque haya uno sin fecha');
+
   // 5) Mantenimiento hecho desde el botón + (móvil) o desde Inicio
   await p.goto(BASE + '#/inicio'); await p.waitForTimeout(300);
   // En móvil, desde el botón «Apuntar algo» de otra pantalla; en PC, desde Inicio

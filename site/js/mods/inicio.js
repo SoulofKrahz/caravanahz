@@ -26,8 +26,13 @@ export function render(view) {
   const gY = D.expenses.filter(e => e.fecha && e.fecha.startsWith(year)).reduce((s, e) => s + (+e.importe || 0), 0);
   const kmY = kmInYear(year), cons = consumption(D.expenses), fuelY = D.expenses.filter(e => e.cat === 'Combustible' && (e.fecha || '').startsWith(year)).reduce((a, e) => a + (+e.importe || 0), 0);
   const today = isoToday();
-  const next = D.trips.filter(t => !tripDone(t, today)).sort((a, b) => (a.inicio || '').localeCompare(b.inicio || ''))[0];
-  const last = D.trips.filter(t => tripDone(t, today)).sort((a, b) => (b.inicio || '').localeCompare(a.inicio || ''))[0];
+  // Viajes en Inicio: el que está en curso, los dos próximos CON fecha (un viaje sin fecha no les quita el sitio),
+  // cuántos hay sin fecha y el último hecho
+  const pend = D.trips.filter(t => !tripDone(t, today));
+  const curso = pend.filter(t => t.inicio && t.inicio <= today).sort((a, b) => a.inicio.localeCompare(b.inicio));
+  const prox = pend.filter(t => t.inicio && t.inicio > today).sort((a, b) => a.inicio.localeCompare(b.inicio));
+  const sinFecha = pend.filter(t => !t.inicio).length;
+  const last = D.trips.filter(t => tripDone(t, today)).sort((a, b) => ((b.fin || b.inicio || '')).localeCompare(a.fin || a.inicio || ''))[0];
 
   // Pedir los km reales justo cuando tocan: al salir y al volver
   const kmAsk = (() => {
@@ -73,8 +78,11 @@ export function render(view) {
     </div>`;
   const tripsHtml = `<div class="sec"><h2>Viajes <a href="#/viajes">Ver todos</a></h2>
       <div class="list">
-        ${next ? tripRow(next, 'Próximo') : ''}${last ? tripRow(last, 'Último') : ''}
-        ${!next && !last ? `<div class="empty sm">Aún no hay viajes. <a href="#/viajes">Planifica el primero</a>.</div>` : ''}
+        ${curso.map(t => tripRow(t, 'En curso')).join('')}
+        ${prox.slice(0, 2).map((t, i) => tripRow(t, i ? 'Después' : 'Próximo')).join('')}
+        ${sinFecha ? `<a class="row" href="#/viajes"><span class="ico">${icon('cal')}</span><span class="m"><b>${sinFecha === 1 ? '1 viaje sin fecha' : sinFecha + ' viajes sin fecha'}</b><small>Ponle fecha de salida para verlo aquí</small></span>${icon('right')}</a>` : ''}
+        ${last ? tripRow(last, 'Último') : ''}
+        ${!D.trips.length ? `<div class="empty sm">Aún no hay viajes. <a href="#/viajes">Planifica el primero</a>.</div>` : ''}
       </div>
       ${D.docs.length ? '' : `<div class="banner" style="margin:12px 0 0"><span>Añade la ITV y el seguro para que te avise antes de que caduquen.</span><button id="nd2">Añadir</button></div>`}
     </div>`;
@@ -148,8 +156,11 @@ export function render(view) {
 }
 
 function tripRow(t, tag) {
-  const n = nightsOf(t), today = isoToday();
-  const d = t.inicio ? (t.inicio > today ? rel(t.inicio) : fDate(t.inicio)) : 'Sin fecha';
+  const n = nightsOf(t), today = isoToday(), short = { weekday: 'short', day: 'numeric', month: 'short' };
+  const d = !t.inicio ? 'Sin fecha'
+    : t.inicio > today ? `sales ${rel(t.inicio)} (${fDate(t.inicio, short)})`
+    : tag === 'En curso' ? (t.fin ? (t.fin === today ? 'vuelves hoy' : `vuelves ${rel(t.fin)}`) : `desde el ${fDate(t.inicio, { day: 'numeric', month: 'short' })}`)
+    : fDate(t.inicio);
   return `<a class="row" href="#/viaje/${t.id}"><span class="ico">${icon('map')}</span><span class="m"><b>${esc(t.nombre)}</b><small>${tag} · ${esc(d)}${+t.kmRuta ? ' · ' + fKm(t.kmRuta) : ''}${n ? ' · ' + n + (n === 1 ? ' noche' : ' noches') : ''}</small></span>${icon('right')}</a>`;
 }
 
