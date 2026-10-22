@@ -129,7 +129,7 @@ function completar(view) {
         <input type="date" data-f max="${isoToday()}" ${v.fechaMat ? `min="${v.fechaMat}"` : ''} aria-label="Fecha" style="flex:1;min-width:0;padding:9px 10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);font-size:16px">
         ${+t.intKm ? `<input type="text" inputmode="numeric" autocomplete="off" data-k placeholder="km" aria-label="Kilómetros" style="width:100px;padding:9px 10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);font-size:16px">` : ''}
         <button class="ib" data-del aria-label="Quitar del plan" title="No aplica: quitar del plan">${icon('trash')}</button></span></div>`).join('')}</div>
-    <div class="brow" style="margin-top:14px">${ref ? `<button class="btn g" id="all">Poner ${refTxt} (${fDate(ref)}) en las vacías</button>` : ''}<button class="btn" id="sv">${icon('check')}Guardar</button></div><div class="pb"></div>`;
+    <div class="brow" style="margin-top:14px">${ref ? `<button class="btn g" id="all">Rellenar las vacías con ${refTxt} (${fDate(ref)})</button>` : ''}<button class="btn" id="sv">${icon('check')}Guardar</button></div><div class="pb"></div>`;
 
   view.querySelectorAll('[data-del]').forEach(b => (b.onclick = async () => {
     const r = b.closest('[data-id]'), t = D.tasks.find(x => x.id === r.dataset.id);

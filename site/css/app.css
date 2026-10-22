@@ -538,3 +538,5 @@ html.simple .swr small{font-size:calc(13.5px*var(--fs,1))}
 /* Con letra grande, las opciones pasan a otra línea en vez de quedar escondidas fuera de la pantalla */
 .seg:not(.sc){flex-wrap:wrap;overflow:visible}
 .seg:not(.sc) button{flex:1 1 auto}
+/* Un botón nunca ensancha la pantalla: con letra grande o una fuente más ancha, su texto baja de línea */
+.btn{max-width:100%;white-space:normal;text-align:center;line-height:1.25}

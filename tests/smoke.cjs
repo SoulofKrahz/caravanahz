@@ -109,12 +109,12 @@ async function run(browser, label, viewport, mobile) {
   ok(await p.locator('.sheet').count() === 0, 'mantenimiento registrado (y su gasto)');
 
   // 6) Todas las pantallas se pintan sin errores ni desbordes
-  for (const u of ['#/inicio', '#/mant', '#/viajes', '#/gastos/gastos', '#/gastos/combustible', '#/gastos/docs', '#/stats', '#/ajustes/vehiculo', '#/ajustes/apariencia', '#/ajustes/avisos', '#/ajustes/viajes', '#/ajustes/copia', '#/ajustes/avanzado']) {
+  for (const u of ['#/inicio', '#/mant', '#/viajes', '#/gastos/gastos', '#/gastos/combustible', '#/gastos/docs', '#/stats', '#/ajustes/vehiculo', '#/ajustes/apariencia', '#/ajustes/avisos', '#/ajustes/viajes', '#/ajustes/copia', '#/ajustes/avanzado', '#/mant/completar']) {
     await p.goto(BASE + u); await p.waitForTimeout(350);
     const bad = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1 || !document.querySelector('#view .vh, #view .empty'));
     if (bad) ok(false, 'pantalla ' + u + ' se pinta bien y sin desbordar');
   }
-  ok(true, 'las 13 pantallas revisadas');
+  ok(true, 'las 14 pantallas revisadas');
   await p.goto(BASE + '#/stats'); await p.waitForTimeout(400);
   ok(await p.locator('.kpis.k3 .kpi').count() === 6 && (await p.locator('.sbars .c').count() >= 1 || await p.locator('.hbars .hb').count() >= 1), 'resumen con indicadores y gasto por mes');
 
@@ -161,10 +161,7 @@ async function run(browser, label, viewport, mobile) {
   await p.goto(BASE + '#/mant/completar'); await p.waitForTimeout(300);
   const row = p.locator('#cl [data-id]:has([data-k])').first(), tid = await row.getAttribute('data-id');
   await row.locator('[data-f]').fill('2024-05-01'); await row.locator('[data-k]').fill('120.000');
-  await p.click('#sv', { timeout: 8000 }).catch(async e => {
-    const d = await p.evaluate(async () => { const b = document.querySelector('#sv'), r1 = b.getBoundingClientRect(); await new Promise(r => setTimeout(r, 200)); const r2 = b.getBoundingClientRect();
-      return JSON.stringify({ r1: [r1.x, r1.y, r1.width, r1.height], r2: [r2.x, r2.y, r2.width, r2.height], sy: scrollY, sh: document.documentElement.scrollHeight, ih: innerHeight, act: document.activeElement && document.activeElement.outerHTML.slice(0, 80), cls: document.documentElement.className + '|' + document.body.className, cw: document.documentElement.clientWidth, sw: document.documentElement.scrollWidth, wide: [...document.querySelectorAll('body *')].filter(e => e.getBoundingClientRect().right > 392).slice(0, 6).map(e => e.tagName + '.' + e.className + '#' + e.id + ':' + Math.round(e.getBoundingClientRect().right) + ':' + getComputedStyle(e).minWidth) }); });
-    ok(false, 'diag #sv ' + d); throw e; });
+  await p.click('#sv');
   await p.waitForTimeout(500);
   ok((await Dm()).tasks.find(t => t.id === tid).ultKm === 120000, 'completar plan: «120.000» km se guardan como 120.000');
   // 9e) Salir de un viaje antes de que cargue el mapa no rompe nada
