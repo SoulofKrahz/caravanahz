@@ -16,9 +16,10 @@ export function render(view, params) {
   const kmTot = past.reduce((s, t) => s + kmOf(t), 0), nights = past.reduce((s, t) => s + nightsOf(t), 0);
   const pl = (n, a, b) => `${n} ${n === 1 ? a : b}`;
   const row = t => { const n = nightsOf(t), tc = tripCost(t, D, e100), real = t.kmIni && t.kmFin;
-    return `<a class="row" href="#/viaje/${t.id}"><span class="ico">${icon('map')}</span><span class="m"><b>${esc(t.nombre)}</b>
+    return `<div class="trow"><a class="row" href="#/viaje/${t.id}"><span class="ico">${icon('map')}</span><span class="m"><b>${esc(t.nombre)}</b>
       <small>${t.inicio ? fDate(t.inicio) + (t.inicio > today ? ' (' + rel(t.inicio) + ')' : '') : 'Sin fecha'} · ${kmOf(t) ? fKm(kmOf(t)) + (real ? '' : ' previstos') : pl((t.paradas || []).length, 'parada', 'paradas')}${n ? ' · ' + pl(n, 'noche', 'noches') : ''}</small></span>
-      <span class="r">${tc.total && tripDone(t, today) ? `<b>${fEur(tc.total)}</b>${tc.estimated ? '<small>coste ≈</small>' : ''}` : ''}</span></a>`; };
+      <span class="r">${tc.total && tripDone(t, today) ? `<b>${fEur(tc.total)}</b>${tc.estimated ? '<small>coste ≈</small>' : ''}` : ''}</span></a>
+      <button class="ib" data-del="${t.id}" aria-label="Borrar el viaje ${esc(t.nombre)}" title="Borrar">${icon('trash')}</button></div>`; };
 
   view.innerHTML = `<div class="vh"><div><h1>Viajes</h1><p>${past.length ? `${pl(past.length, 'viaje hecho', 'viajes hechos')} · ${fKm(kmTot)} · ${pl(nights, 'noche', 'noches')}` : up.length ? pl(up.length, 'viaje planificado', 'viajes planificados') : 'Ningún viaje todavía'}</p></div><button class="btn" id="add">${icon('plus')}Viaje</button></div>
     ${!all.length ? `<div class="empty"><h3>Planifica tu primer viaje</h3><p>Marca la salida, las paradas y dónde duermes. Te calculo los kilómetros, el tiempo y lo que gastarás en gasóleo.</p><button class="btn" id="add2">${icon('plus')}Nuevo viaje</button></div>` : ''}
@@ -27,6 +28,7 @@ export function render(view, params) {
     <div class="pb"></div>`;
   view.querySelector('#add').onclick = () => tripMeta();
   const a2 = view.querySelector('#add2'); if (a2) a2.onclick = () => tripMeta();
+  view.querySelectorAll('[data-del]').forEach(b => (b.onclick = () => deleteTrip(D.trips.find(t => t.id === b.dataset.del))));
   if (params[0] === 'nuevo') { history.replaceState(null, '', '#/viajes'); tripMeta(); }
 }
 export const nightsOf = t => { if (t.inicio && t.fin && t.fin > t.inicio) return daysBetween(t.inicio, t.fin); return (t.paradas || []).filter(p => NIGHT.has(p.tipo)).length; };
@@ -66,19 +68,7 @@ function tripMeta(t = {}) {
         if (isNew) go('viaje/' + rec.id); else { toast('Viaje guardado'); refresh(); }
       });
       const d = s.el.querySelector('[data-del]');
-      if (d) d.onclick = async () => {
-        const g = D.expenses.filter(e => e.viajeId === t.id).length;
-        if (!(await ask({ title: `¿Borrar el viaje «${t.nombre}»?`, text: g ? `Sus ${g} gastos se conservan, sin viaje asignado.` : '', ok: 'Sí, borrar', cancel: 'No', danger: true }))) return;
-        const old = { ...t }, linked = D.expenses.filter(e => e.viajeId === t.id).map(e => e.id);
-        for (const e of D.expenses.filter(e => e.viajeId === t.id)) await put('expenses', { ...e, viajeId: '' });
-        await del('trips', t.id); await s.close();
-        go('viajes'); undo('Viaje eliminado', async () => {
-          await put('trips', old);
-          // Deshacer también devuelve sus gastos al viaje
-          for (const e of D.expenses.filter(e => linked.includes(e.id))) await put('expenses', { ...e, viajeId: old.id });
-          go('viaje/' + old.id);
-        });
-      };
+      if (d) d.onclick = () => deleteTrip(t, () => s.close());
       const dp = s.el.querySelector('[data-dup]');
       if (dp) dp.onclick = async () => {
         const c = await put('trips', { nombre: uniqueName(t.nombre.replace(/ \(\d+\)$/, '') + ' (copia)'), paradas: (t.paradas || []).map(p => ({ ...p, id: uid() })), kmRuta: t.kmRuta, durMin: t.durMin, legs: t.legs, fuente: t.fuente, notas: t.notas });
@@ -86,6 +76,23 @@ function tripMeta(t = {}) {
       };
     }
   });
+}
+
+/** Borrar un viaje: pregunta antes, sus gastos se conservan y se puede deshacer (también devuelve los gastos) */
+async function deleteTrip(t, before) {
+  const g = D.expenses.filter(e => e.viajeId === t.id).length;
+  if (!(await ask({ title: `¿Borrar el viaje «${t.nombre}»?`, text: g ? `Sus ${g} ${g === 1 ? 'gasto se conserva' : 'gastos se conservan'} en Gastos, sin viaje asignado.` : 'Se borran la ruta y las paradas.', ok: 'Sí, borrar', cancel: 'No', danger: true }))) return false;
+  const old = { ...t }, linked = D.expenses.filter(e => e.viajeId === t.id).map(e => e.id);
+  for (const e of D.expenses.filter(e => e.viajeId === t.id)) await put('expenses', { ...e, viajeId: '' });
+  await del('trips', t.id);
+  if (before) await before();
+  if (location.hash === '#/viajes') refresh(); else go('viajes');
+  undo('Viaje borrado', async () => {
+    await put('trips', old);
+    for (const e of D.expenses.filter(e => linked.includes(e.id))) await put('expenses', { ...e, viajeId: old.id });
+    refresh();
+  });
+  return true;
 }
 
 /* ---------- Km reales de salida y de vuelta ---------- */
@@ -210,7 +217,8 @@ export function renderTrip(view, [id]) {
         <div class="sec" style="margin-top:22px"><h2>Gastos del viaje <button id="ga">+ Añadir</button></h2><div id="gl"></div></div>
         ${t.notas ? `<div class="sec" style="margin-top:22px"><h2>Notas</h2><div class="card" style="white-space:pre-wrap">${esc(t.notas)}</div></div>` : ''}
       </div>
-    </div><div class="pb"></div>`;
+    </div>
+    <div class="brow" style="margin-top:26px"><button class="btn d" id="dtr">${icon('trash')}Borrar este viaje</button></div><div class="pb"></div>`;
 
   const save = () => { clearTimeout(saveT); saveT = setTimeout(() => { if (D.trips.includes(t)) put('trips', t).catch(e => toast('No se ha podido guardar el viaje: ' + (e.message || e))); }, 300); };
   const meta = () => {
@@ -356,6 +364,7 @@ export function renderTrip(view, [id]) {
     try { if (navigator.share) await navigator.share({ title: t.nombre, text }); else { await navigator.clipboard.writeText(text); toast('Resumen copiado'); } } catch (e) {}
   };
   $('#meta').onclick = () => tripMeta(t);
+  $('#dtr').onclick = () => { clearTimeout(saveT); deleteTrip(t); };
 
   // Gastos del viaje
   const gl = () => {

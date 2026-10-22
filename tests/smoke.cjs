@@ -168,6 +168,18 @@ async function run(browser, label, viewport, mobile) {
   const tr = (await Dm()).trips[0];
   await p.goto(BASE + '#/viaje/' + tr.id); await p.evaluate(() => (location.hash = '#/inicio')); await p.waitForTimeout(800);
   ok(await p.locator('#view .vh').count() === 1, 'salir rápido de un viaje deja la pantalla bien');
+  // 9g) Borrar un viaje desde la lista (con pregunta y deshacer) y desde el propio viaje
+  await p.goto(BASE + '#/viajes'); await p.waitForTimeout(300);
+  const nT = (await Dm()).trips.length;
+  await p.click('#view [data-del] >> nth=0'); await p.waitForTimeout(300);
+  ok(await p.locator('.ask').count() === 1, 'borrar un viaje desde la lista pregunta antes');
+  await p.click('.ask [data-ok]'); await p.waitForTimeout(500);
+  ok((await Dm()).trips.length === nT - 1 && await p.locator('#view .trow').count() === nT - 1, 'viaje borrado desde la lista');
+  await p.click('#undo button'); await p.waitForTimeout(500);
+  ok((await Dm()).trips.length === nT && await p.locator('#view .trow').count() === nT, 'deshacer recupera el viaje');
+  await p.click('#view .trow a >> nth=0'); await p.waitForTimeout(800);
+  await p.click('#dtr'); await p.waitForTimeout(300); await p.click('.ask [data-ok]'); await p.waitForTimeout(600);
+  ok(p.url().endsWith('#/viajes') && (await Dm()).trips.length === nT - 1, 'viaje borrado desde su pantalla y vuelta a la lista');
   // 9f) Apariencia: sin vista previa redundante del tamaño de letra
   await p.goto(BASE + '#/ajustes/apariencia'); await p.waitForTimeout(300);
   ok(!(await p.innerText('#view')).includes('Vista previa'), 'tamaño del texto sin vista previa redundante');

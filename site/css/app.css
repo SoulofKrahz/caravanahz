@@ -540,3 +540,9 @@ html.simple .swr small{font-size:calc(13.5px*var(--fs,1))}
 .seg:not(.sc) button{flex:1 1 auto}
 /* Un botón nunca ensancha la pantalla: con letra grande o una fuente más ancha, su texto baja de línea */
 .btn{max-width:100%;white-space:normal;text-align:center;line-height:1.25}
+/* Viaje en la lista con su papelera al lado (el enlace y el botón, separados) */
+.trow{display:flex;align-items:center;border-top:1px solid var(--bd)}
+.list>.trow:first-child{border-top:0}
+.trow>.row{border-top:0;flex:1;min-width:0}
+.trow>.ib{margin-right:8px;width:44px;height:44px}
+.trow>.ib:active{color:var(--bad)}
