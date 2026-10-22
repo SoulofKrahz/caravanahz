@@ -7,7 +7,7 @@
 // - Cada versión publicada trae un sw.js distinto; el navegador lo detecta, guarda la nueva en segundo plano y la app
 //   avisa. La recarga nunca ocurre con un formulario a medias (lo decide la app, no el service worker).
 // - Leaflet y las fuentes se guardan aparte (EXT) para no perderlas en cada actualización.
-const V = 'cz-2026-10-22-2';
+const V = 'cz-2026-10-22-3';
 const EXT = 'cz-ext-1';
 // './' y no 'index.html': Cloudflare Pages redirige /index.html → / y una respuesta redirigida no sirve para abrir la página
 const SHELL = ['./', 'css/app.css', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/apple-touch-icon.png',
@@ -29,6 +29,12 @@ self.addEventListener('fetch', e => {
   const u = new URL(req.url);
   if (u.origin === location.origin) {
     if (u.pathname.endsWith('/version.txt')) return; // siempre a la red: sirve para saber si hay versión nueva
+    // El manifest cambia según el color elegido (lo decide _worker.js por la cookie): de la red y, sin conexión, la copia
+    if (u.pathname.endsWith('/manifest.webmanifest')) {
+      e.respondWith(fetch(req).then(r => { if (r.ok) { const y = r.clone(); caches.open(V).then(c => c.put('manifest.webmanifest', y)); } return r; })
+        .catch(() => caches.open(V).then(c => c.match('manifest.webmanifest'))));
+      return;
+    }
     // Páginas (abrir la app, recargar): el index.html guardado
     if (req.mode === 'navigate') {
       e.respondWith(caches.open(V).then(c => c.match('./')).then(r => r || fetch(req)));

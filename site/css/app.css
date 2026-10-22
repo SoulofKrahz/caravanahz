@@ -417,7 +417,7 @@ a.kpi{text-decoration:none;color:var(--tx)}
   .btn.sm{min-height:40px}
 }
 .row.call{padding-top:8px;padding-bottom:10px;border-top:1px dashed var(--bd)}.row.call .ico{width:32px;height:32px;background:none}.row.call b{color:var(--em);font-size:calc(13.5px*var(--fs,1))}
-.vnb{margin:12px 0 0;border-color:var(--em2);background:var(--tint)}.vnb span{font-weight:600}
+
 
 /* ================= MODO SENCILLO =================
    Pensado para leer con gafas y tocar sin precisión: letra mayor, más contraste, botones grandes,
@@ -546,3 +546,29 @@ html.simple .swr small{font-size:calc(13.5px*var(--fs,1))}
 .trow>.row{border-top:0;flex:1;min-width:0}
 .trow>.ib{margin-right:8px;width:44px;height:44px}
 .trow>.ib:active{color:var(--bad)}
+/* Aviso de versión nueva (como en Noticiahz): tarjeta flotante abajo, siempre a la vista.
+   Va por debajo de las hojas (z 35 < 40): con un formulario abierto no se puede pulsar «Actualizar» por error. */
+.upd{position:fixed;z-index:35;left:16px;right:16px;bottom:calc(20px + env(safe-area-inset-bottom));display:grid;grid-template-columns:auto 1fr auto;align-items:start;gap:10px 12px;padding:12px 10px 12px 12px;background:var(--card);color:var(--tx);border:1px solid color-mix(in srgb,var(--em) 35%,var(--bd));border-radius:18px;box-shadow:0 18px 40px -18px #0009,0 2px 6px -2px #0002;animation:updin .32s cubic-bezier(.2,.8,.2,1);transition:transform .2s}
+.upd[hidden]{display:none}
+@keyframes updin{from{opacity:0;transform:translateY(16px)}}
+.upi{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:var(--tint);color:var(--em)}.upi svg{width:20px;height:20px}
+.upt{min-width:0;display:flex;flex-direction:column;line-height:1.25;align-self:center}
+.upt b{font-size:calc(15px*var(--fs,1));font-weight:650}
+.upt small{font-size:calc(12.5px*var(--fs,1));color:var(--mu);margin-top:3px;line-height:1.35}
+.upt .nw{white-space:nowrap;font-weight:600;color:var(--tx)}
+.upd .btn{grid-column:1/-1;margin:2px 0 0;padding:11px 16px;min-height:46px}.upd .btn svg{width:16px;height:16px}
+.upd .btn.spin svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.upx{width:36px;height:36px}
+body:has(#undo:not([hidden])) .upd{transform:translateY(-64px)}
+html.rm .upd{animation:none}
+@media(max-width:760px){
+  .upd{bottom:calc(76px + env(safe-area-inset-bottom))}
+  body.has-fab .upd{bottom:calc(142px + env(safe-area-inset-bottom))}
+}
+@media(min-width:761px){.upd{left:24px;right:auto;bottom:24px;width:440px}}
+html.simple .upt b{font-size:calc(17px*var(--fs,1))}
+html.simple .upt small{font-size:calc(14.5px*var(--fs,1))}
+html.simple .upd .btn{min-height:54px;font-size:calc(16px*var(--fs,1))}
+/* Con el aviso de versión nueva a la vista, los avisos cortos salen arriba para no taparlo */
+body:has(#vnb:not([hidden])) .toast{top:calc(70px + env(safe-area-inset-top));bottom:auto!important}

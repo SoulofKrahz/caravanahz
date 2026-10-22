@@ -79,18 +79,24 @@ function vehiculo(el) {
 }
 
 /* ---------- Apariencia ---------- */
+// Un color personalizado no tiene icono propio: el icono de la app usa el de la paleta más parecido
+const swName = (i, p) => {
+  if (i >= 0) return PRESETS[i][0];
+  const k = window.czIco ? window.czIco(p.ah, p.as) : '', n = PRESETS.find(x => x[1] != null && x[0].normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === k);
+  return `Personalizado · icono ${n ? n[0] : PRESETS[0][0]}`;
+};
 function apariencia(el) {
   const p = prefs(), sel = presetIndex(p), simple = isSimple();
   el.innerHTML = set('Modo sencillo', 'Letra y botones más grandes, textos más claros y solo lo esencial a la vista. Recomendado si la app la usa alguien con poca costumbre o con gafas.', `<div class="gc">${sw('simple', 'Modo sencillo', p.simple !== false ? 'Activado' : 'Desactivado: se ve todo, más compacto', p.simple !== false)}</div>`)
     + set('Tema', 'Automático sigue el modo claro u oscuro del móvil.', seg('theme', [['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']], p.theme))
-    + set('Color', 'Se aplica a botones, avisos, logotipo e icono. El contraste se ajusta solo para que el texto siempre se lea.',
+    + set('Color', `Se aplica a botones, avisos, logotipo y al icono de la app. El contraste se ajusta solo para que el texto siempre se lea.${isApp() ? ' <b>Icono de la app instalada:</b> Android lo cambia la próxima vez que la abras con conexión; puede tardar hasta un día y a veces pide confirmarlo.' : ''}`,
       `<div class="sws" id="sws" role="radiogroup" aria-label="Color de la app">${PRESETS.map(([n, h, s], i) => `<button class="swc ${i === sel ? 'on' : ''}" data-i="${i}" style="background:${swatchHex(h, s)}" role="radio" aria-checked="${i === sel}" aria-label="${n}" title="${n}"></button>`).join('')}</div>
-       <div class="row" style="border:0;padding:14px 0 0"><div class="m"><b id="swn">${sel >= 0 ? PRESETS[sel][0] : 'Personalizado'}</b><small style="white-space:normal">O elige cualquier color con el selector.</small></div>
+       <div class="row" style="border:0;padding:14px 0 0"><div class="m"><b id="swn">${swName(sel, p)}</b><small style="white-space:normal">O elige cualquier color con el selector.</small></div>
        <input type="color" id="acc" value="${sel === 0 ? '#059669' : swatchHex(p.ah, p.as)}" aria-label="Color personalizado" class="cpick"></div>`)
     + set('Tamaño del texto', 'Se aplica al momento en toda la app. Elige el que leas sin esfuerzo.', seg('fs', FONT_SIZES, p.fs))
     + set('Pantalla al abrir', 'La primera que ves al entrar en la app.', seg('start', [['inicio', 'Inicio'], ['mant', simple ? 'Revisiones' : 'Mantenimiento'], ['viajes', 'Viajes'], ['gastos', 'Gastos'], ['stats', simple ? 'Resumen' : 'Estadísticas']], p.start))
     + set('Movimiento', '', `<div class="gc">${sw('reduceMotion', 'Reducir animaciones', 'Sin transiciones ni desplazamientos suaves', p.reduceMotion)}</div>`);
-  const name = () => { const i = presetIndex(); el.querySelector('#swn').textContent = i >= 0 ? PRESETS[i][0] : 'Personalizado'; el.querySelectorAll('.swc').forEach((b, k) => { b.classList.toggle('on', k === i); b.setAttribute('aria-checked', k === i); }); };
+  const name = () => { const i = presetIndex(); el.querySelector('#swn').textContent = swName(i, prefs()); el.querySelectorAll('.swc').forEach((b, k) => { b.classList.toggle('on', k === i); b.setAttribute('aria-checked', k === i); }); };
   el.querySelector('#sws').onclick = async e => {
     const b = e.target.closest('[data-i]'); if (!b) return;
     const [, h, s] = PRESETS[+b.dataset.i];

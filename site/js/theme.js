@@ -42,9 +42,11 @@ export function applyLook(p = prefs()) {
   root.classList.toggle('rm', !!p.reduceMotion);
   root.classList.toggle('simple', p.simple !== false);
   document.querySelector('meta[name=theme-color]').content = dark ? '#0d1523' : acc ? acc.barL : '#047857';
-  // Favicon con el color elegido
-  const col = acc ? acc.fav : ESMERALDA;
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='15' fill='${col}'/><path d='M12 42V24a4 4 0 0 1 4-4h22l8 9h4a3 3 0 0 1 3 3v10' fill='none' stroke='%2306150f' stroke-width='5' stroke-linejoin='round'/><circle cx='21' cy='44' r='4.5' fill='white'/><circle cx='43' cy='44' r='4.5' fill='white'/><path d='M17 26h12v7H17z' fill='white'/></svg>`;
+  // Icono de la app instalada (y de iPhone) del mismo color: ver czMan en index.html
+  if (window.czMan) window.czMan(p.ah, p.as);
+  // Favicon con el color elegido (furgoneta en blanco si el color es oscuro)
+  const col = acc ? acc.fav : ESMERALDA, ink = acc && acc.lt ? 'white' : '%2306150f';
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='15' fill='${col}'/><path d='M12 42V24a4 4 0 0 1 4-4h22l8 9h4a3 3 0 0 1 3 3v10' fill='none' stroke='${ink}' stroke-width='5' stroke-linejoin='round'/><circle cx='21' cy='44' r='4.5' fill='white'/><circle cx='43' cy='44' r='4.5' fill='white'/><path d='M17 26h12v7H17z' fill='white'/></svg>`;
   document.querySelector('link[rel=icon]').href = 'data:image/svg+xml,' + svg.replace(/#/g, '%23');
   const th = document.querySelector('#th use'); if (th) th.setAttribute('href', dark ? '#i-sun' : '#i-moon');
   try { localStorage.setItem('cz_pf', JSON.stringify({ th: p.theme, ah: p.ah, as: p.as, fs: p.fs, rm: !!p.reduceMotion, sm: p.simple !== false })); } catch (e) {}

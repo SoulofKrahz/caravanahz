@@ -56,30 +56,46 @@ onInstallChange(() => { const h = location.hash; if (/^#\/(inicio|ajustes\/avanz
      si sales de la app sin nada a medias, se aplica sola; si no, al pulsar «Actualizar ahora». */
 const busy = () => !!document.querySelector('.sheet, .ask');
 const swOK = 'serviceWorker' in navigator && window.isSecureContext;
-let newReady = false;
-const showNew = txt => { $('#vnb').hidden = false; $('#vnb span').textContent = txt; };
+let newReady = false, newVer = '', dismissed = '';
+// «2026-10-22-10» es más nueva que «2026-10-22-9» (se compara número a número, no como texto)
+const newer = (a, b) => { const x = a.split(/[-.]/).map(Number), y = b.split(/[-.]/).map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0; } return false; };
+const showNew = () => {
+  if (dismissed && dismissed === (newVer || 'lista')) return;
+  $('#vnt').textContent = 'Hay una versión nueva';
+  $('#vnv').innerHTML = (newVer ? `Versión <span class="nw">${esc(newVer)}</span> · ahora tienes la <span class="nw">${esc(VER)}</span><br>` : '') + (newReady ? 'Ya está descargada. Tarda un segundo y no pierdes nada.' : 'Tarda un segundo y no pierdes nada.');
+  $('#vnb').hidden = false;
+};
 const regUpdate = async () => { try { const r = swOK && (await navigator.serviceWorker.getRegistration()); if (r) await r.update(); return !!r; } catch (e) { return false; } };
 {
   let last = 0;
-  const chk = () => {
-    if (document.hidden || Date.now() - last < 6e5 || !/^https?:$/.test(location.protocol)) return;
+  const chk = force => {
+    if (!/^https?:$/.test(location.protocol) || (force !== true && (document.hidden || Date.now() - last < 6e5))) return;
     last = Date.now();
     fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }).then(r => (r.ok ? r.text() : '')).then(v => {
       v = (v || '').trim();
-      if (/^\d{4}-\d\d-\d\d-[\d.]+$/.test(v) && v !== VER) { if (!newReady) showNew(`Hay una versión nueva de la app (${v}).`); regUpdate(); }
+      if (/^\d{4}-\d\d-\d\d-[\d.]+$/.test(v) && newer(v, VER)) { newVer = v; showNew(); regUpdate(); }
     }).catch(() => {});
   };
   setTimeout(chk, 2500); document.addEventListener('visibilitychange', chk); setInterval(chk, 18e5);
+  window.__czChk = () => chk(true);
+  // «Ahora no»: no vuelve a salir para esa versión hasta que abras la app otra vez
+  $('#vnx').onclick = () => { dismissed = newVer || 'lista'; $('#vnb').hidden = true; };
   $('#vng').onclick = async () => {
     const b = $('#vng');
+    if (busy()) return toast('Primero guarda o cierra lo que tienes abierto');
     if (newReady || !swOK) return location.reload();
-    b.disabled = true; b.textContent = 'Descargando…';
+    b.disabled = true; b.classList.add('spin'); b.innerHTML = `${icon('rf')}Actualizando…`; $('#vnx').hidden = true;
     await regUpdate();
-    // Se espera a que la versión nueva esté guardada entera (como mucho 20 s)
+    // Se espera a que la versión nueva esté guardada entera (como mucho 20 s): nunca se queda a medias
     const ok = await new Promise(res => { if (newReady) return res(true); const t = setTimeout(() => res(false), 20000); addEventListener('cz-new-ready', () => { clearTimeout(t); res(true); }, { once: true }); });
     if (ok) location.reload();
-    else { b.disabled = false; b.textContent = 'Actualizar ahora'; toast('No se ha podido descargar ahora. Se intentará solo cuando haya mejor cobertura'); }
+    else { b.disabled = false; b.classList.remove('spin'); b.innerHTML = `${icon('rf')}Actualizar ahora`; $('#vnx').hidden = false; toast('La conexión va muy lenta. Se descargará sola cuando haya mejor cobertura'); }
   };
+}
+// Después de actualizar, un aviso confirma la versión nueva (así se sabe que ha funcionado)
+{
+  let prev = null; try { prev = localStorage.getItem('cz_ver'); localStorage.setItem('cz_ver', VER); } catch (e) {}
+  if (prev && prev !== VER) setTimeout(() => toast(`Caravanahz actualizada (versión ${VER})`), 900);
 }
 
 /* PWA */
@@ -88,7 +104,7 @@ if (swOK) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!had) return; // primera instalación: no hay nada que actualizar
     newReady = true; dispatchEvent(new Event('cz-new-ready'));
-    showNew('Hay una versión nueva de la app lista.'); $('#vng').textContent = 'Actualizar ahora'; $('#vng').disabled = false;
+    if (!$('#vng').disabled) showNew();
   });
   // Al salir de la app (cambiar a otra, bloquear el móvil) y sin nada a medias, se aplica sin que se note
   document.addEventListener('visibilitychange', () => { if (document.hidden && newReady && !busy()) location.reload(); });

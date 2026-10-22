@@ -29,9 +29,15 @@ window.czAcc=function(h,s){
  var e2D=C(h,s*.8,Math.max(ld-12,36)),onD=C(h,.6,6);
  var css='html:root{--em:'+hx(em)+';--em2:'+hx(e2)+';--tint:'+hx(tint)+';--onem:#fff}'
   +'html[data-theme=dark]{--em:'+hx(emD)+';--em2:'+hx(e2D)+';--tint:hsla('+Math.round(h)+','+Math.round(s*80)+'%,48%,.14);--onem:'+hx(onD)+'}';
- return{css:css,barL:hx(em),barD:'#0d1523',fav:hx(e2)}};
+ // lt: el color es oscuro y la furgoneta del icono va en blanco (en negro no se vería)
+ return{css:css,barL:hx(em),barD:'#0d1523',fav:hx(e2),lt:cr(e2,N('#06150f'))<3.6}};
 window.czApply=function(h,s){var st=document.getElementById('acs');if(h==null||isNaN(h)){if(st)st.remove();window.czLast=null;return null}var a=czAcc(+h,s==null?.85:+s);if(!st){st=document.createElement('style');st.id='acs';document.head.appendChild(st)}st.textContent=a.css;window.czLast=a;return a};
-try{var p=JSON.parse(localStorage.getItem('cz_pf'))||{},t=p.th;if(t!=='dark'&&t!=='light')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';var d=document.documentElement;d.dataset.theme=t;d.style.setProperty('--fs',p.fs||1.12);if(p.sm!==false)d.classList.add('simple');if(p.rm)d.classList.add('rm');if(p.ah!=null)czApply(p.ah,p.as)}catch(e){}
+/* Icono de la app instalada: cada color de la paleta tiene iconos y manifest propios (ic/, manifest-<color>.webmanifest).
+   La dirección del manifest no cambia nunca (si cambia, Android no actualiza el icono): la app deja el color en la
+   cookie cz_ic y _worker.js sirve en manifest.webmanifest el de ese color. Un color personalizado usa el más parecido. */
+window.czIco=function(h,s){if(h==null||isNaN(h))return'';h=+h;s=s==null?.85:+s;if(s<.3)return'grafito';var P=[['',160],['turquesa',185],['azul',214],['indigo',243],['violeta',272],['rosa',328],['coral',6],['naranja',27],['ambar',42],['oliva',80]],b=P[0],d=1e9;P.forEach(function(x){var e=Math.abs(h-x[1])%360;e=Math.min(e,360-e);if(e<d){d=e;b=x}});return b[0]};
+window.czMan=function(h,s){var k=czIco(h,s),a=document.querySelector('link[rel=apple-touch-icon]');try{document.cookie='cz_ic='+(k||'')+';path=/;max-age=31536000;SameSite=Lax'+(location.protocol==='https:'?';Secure':'')}catch(e){}if(a)a.setAttribute('href',k?'ic/'+k+'-apple.png':'icons/apple-touch-icon.png');return k};
+try{var p=JSON.parse(localStorage.getItem('cz_pf'))||{},t=p.th;if(t!=='dark'&&t!=='light')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';var d=document.documentElement;d.dataset.theme=t;d.style.setProperty('--fs',p.fs||1.12);if(p.sm!==false)d.classList.add('simple');if(p.rm)d.classList.add('rm');if(p.ah!=null)czApply(p.ah,p.as);czMan(p.ah,p.as)}catch(e){}
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -71,7 +77,7 @@ try{var p=JSON.parse(localStorage.getItem('cz_pf'))||{},t=p.th;if(t!=='dark'&&t!
 <symbol id="i-share" viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="m8.2 10.8 7.6-3.6M8.2 13.2l7.6 3.6"/></symbol>
 <symbol id="i-moon-bed" viewBox="0 0 24 24"><path d="M3 18v-6h18v6M3 15h18M7 12V9h5v3"/></symbol>
 <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17v.5"/></symbol>
-<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-rf" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol><symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
 <symbol id="i-phone" viewBox="0 0 24 24"><path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2z"/></symbol>
 <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
 <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
@@ -89,9 +95,9 @@ try{var p=JSON.parse(localStorage.getItem('cz_pf'))||{},t=p.th;if(t!=='dark'&&t!
   <a class="ib" id="cfg" href="#/ajustes" aria-label="Ajustes" title="Ajustes"><svg class="i"><use href="#i-cog"/></svg></a>
 </div></header>
 
-<div class="wrap"><div class="banner vnb" id="vnb" hidden role="status"><span>Hay una versión nueva de la app.</span><button id="vng">Actualizar ahora</button></div></div>
 <main class="wrap" id="view" tabindex="-1"></main>
 
+<div class="upd" id="vnb" hidden role="status" aria-live="polite"><span class="upi"><svg class="i"><use href="#i-rf"/></svg></span><div class="upt"><b id="vnt">Hay una versión nueva</b><small id="vnv">Tarda un segundo y no pierdes nada.</small></div><button class="ib upx" id="vnx" aria-label="Ahora no" title="Ahora no"><svg class="i"><use href="#i-x"/></svg></button><button class="btn" id="vng"><svg class="i"><use href="#i-rf"/></svg>Actualizar ahora</button></div>
 <nav class="bb" id="bb" aria-label="Secciones"></nav>
 <button class="fab" id="fab" aria-label="Apuntar algo" title="Apuntar algo"><svg class="i"><use href="#i-plus"/></svg><span>Apuntar algo</span></button>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

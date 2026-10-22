@@ -194,6 +194,17 @@ async function run(browser, label, viewport, mobile) {
   const bars = await p.evaluate(() => [document.querySelector('header'), document.querySelector('#bb')].filter(e => e && e.offsetHeight).map(e => { const r = e.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2, h = document.elementFromPoint(x, y); return h && h.closest('#map') ? 'tapada' : 'ok'; }).join(','));
   ok(!bars.includes('tapada'), 'el mapa no tapa la cabecera ni la barra de abajo (' + bars + ')');
 
+  // 9i) Cambiar de color cambia también el icono (cookie para el manifest e icono de iPhone)
+  await p.goto(BASE + '#/ajustes/apariencia'); await p.waitForTimeout(300);
+  await p.click('#sws [aria-label="Azul"]'); await p.waitForTimeout(300);
+  const ic1 = await p.evaluate(() => [document.cookie, document.querySelector('link[rel=apple-touch-icon]').getAttribute('href')]);
+  ok(/cz_ic=azul/.test(ic1[0]) && ic1[1] === 'ic/azul-apple.png', 'color Azul: el icono de la app pasa a azul (' + ic1.join(' · ') + ')');
+  await p.reload(); await p.waitForTimeout(500);
+  ok((await p.evaluate(() => document.querySelector('link[rel=apple-touch-icon]').getAttribute('href'))) === 'ic/azul-apple.png', 'el icono se mantiene al volver a abrir');
+  await p.click('#sws [aria-label="Esmeralda"]'); await p.waitForTimeout(300);
+  const ic2 = await p.evaluate(() => [document.cookie, document.querySelector('link[rel=apple-touch-icon]').getAttribute('href')]);
+  ok(!/cz_ic=[a-z]/.test(ic2[0]) && ic2[1] === 'icons/apple-touch-icon.png', 'volver a Esmeralda devuelve el icono de siempre');
+
   // 9f) Apariencia: sin vista previa redundante del tamaño de letra
   await p.goto(BASE + '#/ajustes/apariencia'); await p.waitForTimeout(300);
   ok(!(await p.innerText('#view')).includes('Vista previa'), 'tamaño del texto sin vista previa redundante');
