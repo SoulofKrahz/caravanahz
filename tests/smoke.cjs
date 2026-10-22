@@ -180,7 +180,7 @@ async function run(browser, label, viewport, mobile) {
   try {
     await run(browser, 'Móvil', { width: 390, height: 844 }, true);
     await run(browser, 'PC', { width: 1280, height: 860 }, false);
-  } catch (e) { ok(false, 'la prueba se interrumpió: ' + e.message.split('\n')[0]); console.error(e); }
+  } catch (e) { ok(false, 'la prueba se interrumpió: ' + e.message.split('\n').slice(0, 6).join(' · ')); console.error(e); }
   await browser.close();
   console.log(fails.length ? `\n${fails.length} fallo(s):\n- ${fails.join('\n- ')}` : '\nTodo correcto');
   process.exit(fails.length ? 1 : 0);
