@@ -180,6 +180,20 @@ async function run(browser, label, viewport, mobile) {
   await p.click('#view .trow a >> nth=0'); await p.waitForTimeout(800);
   await p.click('#dtr'); await p.waitForTimeout(300); await p.click('.ask [data-ok]'); await p.waitForTimeout(600);
   ok(p.url().endsWith('#/viajes') && (await Dm()).trips.length === nT - 1, 'viaje borrado desde su pantalla y vuelta a la lista');
+  // 9h) El mapa nunca queda por encima de las hojas, la cabecera ni la barra (Leaflet usa capas con z-index 400–1000)
+  const trp = (await Dm()).trips[0];
+  await p.goto(BASE + '#/viaje/' + trp.id); await p.waitForTimeout(500);
+  await p.evaluate(() => { const m = document.querySelector('#map'); for (const z of [400, 800, 1000]) { const d = document.createElement('div'); d.className = 'fake-leaflet'; d.style.cssText = `position:absolute;inset:0;z-index:${z}`; m.appendChild(d); } });
+  await p.click('#meta'); await p.waitForTimeout(400);
+  const top = await p.evaluate(() => { const sh = document.querySelector('.sheet'), mp = document.querySelector('#map').getBoundingClientRect();
+    const pts = [[mp.left + mp.width / 2, Math.max(mp.top + 10, 10)], [mp.left + mp.width / 2, Math.min(mp.bottom - 10, innerHeight - 10)]];
+    return pts.map(([x, y]) => { const e = document.elementFromPoint(x, y); return !e || !e.closest('#map') ? 'ok' : 'mapa'; }).join(','); });
+  ok(!top.includes('mapa'), 'con un viaje abierto, la hoja «Datos» queda por encima del mapa (' + top + ')');
+  await closeSheet();
+  await p.evaluate(() => scrollTo(0, 120)); await p.waitForTimeout(200);
+  const bars = await p.evaluate(() => [document.querySelector('header'), document.querySelector('#bb')].filter(e => e && e.offsetHeight).map(e => { const r = e.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2, h = document.elementFromPoint(x, y); return h && h.closest('#map') ? 'tapada' : 'ok'; }).join(','));
+  ok(!bars.includes('tapada'), 'el mapa no tapa la cabecera ni la barra de abajo (' + bars + ')');
+
   // 9f) Apariencia: sin vista previa redundante del tamaño de letra
   await p.goto(BASE + '#/ajustes/apariencia'); await p.waitForTimeout(300);
   ok(!(await p.innerText('#view')).includes('Vista previa'), 'tamaño del texto sin vista previa redundante');

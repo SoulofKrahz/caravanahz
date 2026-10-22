@@ -193,7 +193,7 @@ svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .hb .t i{display:block;height:100%;background:var(--em2);border-radius:99px}
 
 /* Mapa de viajes */
-.mapw{position:relative;border-radius:var(--r);overflow:hidden;border:1px solid var(--bd);box-shadow:var(--sh);height:min(52vh,460px);background:#c9d6d8}
+.mapw{position:relative;isolation:isolate;z-index:0;border-radius:var(--r);overflow:hidden;border:1px solid var(--bd);box-shadow:var(--sh);height:min(52vh,460px);background:#c9d6d8}
 #map{width:100%;height:100%}
 .maphint{position:absolute;left:10px;top:10px;right:10px;max-width:380px;z-index:500;background:color-mix(in srgb,var(--card) 92%,transparent);border:1px solid var(--bd);padding:8px 12px;border-radius:12px;font-size:calc(12.5px*var(--fs,1));pointer-events:none;box-shadow:var(--sh)}
 .pin{border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:calc(11px*var(--fs,1));font-family:Inter,sans-serif;box-shadow:0 1px 4px #0006;border:2px solid #fff;width:26px;height:26px;background:var(--em2)}
@@ -202,7 +202,7 @@ svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .srch{position:relative}
 .srch input{width:100%;padding:11px 12px 11px 36px;border:1px solid var(--bd);border-radius:12px;background:var(--card);font-size:16px}
 .srch>svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--mu);width:16px;height:16px}
-.sugg{position:absolute;z-index:600;left:0;right:0;top:calc(100% + 4px);background:var(--card);border:1px solid var(--bd);border-radius:12px;box-shadow:0 14px 34px -14px #0006;max-height:260px;overflow-y:auto}
+.sugg{position:absolute;z-index:10;left:0;right:0;top:calc(100% + 4px);background:var(--card);border:1px solid var(--bd);border-radius:12px;box-shadow:0 14px 34px -14px #0006;max-height:260px;overflow-y:auto}
 .sugg button{display:block;width:100%;text-align:left;padding:11px 14px;border-top:1px solid var(--bd);font-size:calc(14px*var(--fs,1));min-height:44px}
 .sugg button:first-child{border-top:0}
 
