@@ -6,12 +6,14 @@ const fs = require('fs'), path = require('path');
 const SITE = path.join(__dirname, '..', 'site'), BASE = 'http://app.test/';
 const MIME = { html: 'text/html; charset=utf-8', js: 'text/javascript', css: 'text/css', json: 'application/json', webmanifest: 'application/manifest+json', svg: 'image/svg+xml', png: 'image/png', txt: 'text/plain' };
 const fails = [];
-const ok = (cond, msg) => { if (!cond) fails.push(msg); console.log((cond ? '  ✓ ' : '  ✗ ') + msg); };
+let where = '';
+// En GitHub, cada fallo sale también como anotación (se ve en el resumen sin abrir el registro)
+const ok = (cond, msg) => { if (!cond) { fails.push(where + msg); if (process.env.GITHUB_ACTIONS) console.log(`::error title=Prueba de humo::${where}${msg}`.replace(/\n/g, ' ')); } console.log((cond ? '  ✓ ' : '  ✗ ') + msg); };
 const iso = d => d.toISOString().slice(0, 10);
 const today = new Date(), ayer = new Date(Date.now() - 864e5);
 
 async function run(browser, label, viewport, mobile) {
-  console.log(`\n== ${label}`);
+  console.log(`\n== ${label}`); where = label + ': ';
   const ctx = await browser.newContext({ viewport, isMobile: mobile, hasTouch: mobile, serviceWorkers: 'block', locale: 'es-ES' });
   const p = await ctx.newPage(), errs = [];
   p.on('pageerror', e => errs.push(e.message));
@@ -178,7 +180,7 @@ async function run(browser, label, viewport, mobile) {
   try {
     await run(browser, 'Móvil', { width: 390, height: 844 }, true);
     await run(browser, 'PC', { width: 1280, height: 860 }, false);
-  } catch (e) { fails.push('la prueba se interrumpió: ' + e.message); console.error(e); }
+  } catch (e) { ok(false, 'la prueba se interrumpió: ' + e.message.split('\n')[0]); console.error(e); }
   await browser.close();
   console.log(fails.length ? `\n${fails.length} fallo(s):\n- ${fails.join('\n- ')}` : '\nTodo correcto');
   process.exit(fails.length ? 1 : 0);
