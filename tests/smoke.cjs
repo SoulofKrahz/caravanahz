@@ -341,9 +341,12 @@ async function run(browser, label, viewport, mobile) {
     ok(await at() === '#/inicio' && (await q.innerText('#toast')).includes('Pulsa atrás otra vez para salir'), 'Atrás en Inicio: «Pulsa atrás otra vez para salir» y sigue en la app');
     await q.waitForTimeout(3300);
     await back(); ok(await at() === '#/inicio', 'pasados 3 s, Atrás vuelve a avisar (no sale por sorpresa)');
+    // Durante el aviso se abre un formulario y se cierra con Atrás: el aviso se anula y la app no se cierra
     await q.click('#qf'); await q.waitForTimeout(300); await back();
-    ok(await q.locator('.sheet').count() === 0 && await at() === '#/inicio', 'con un formulario abierto, Atrás lo cierra y no avisa de salir');
-    await back(); await q.evaluate(() => history.back()); await q.waitForTimeout(600);
+    ok(await q.locator('.sheet').count() === 0 && await at() === '#/inicio', 'con un formulario abierto, Atrás lo cierra');
+    await back();
+    ok(q.url().startsWith(BASE) && (await q.innerText('#toast')).includes('para salir'), 'tras cerrar el formulario, Atrás vuelve a avisar en vez de salir');
+    await q.evaluate(() => history.back()).catch(() => {}); await q.waitForTimeout(800);
     ok(!q.url().startsWith(BASE), 'dos veces Atrás seguidas en Inicio: sale de la app (' + q.url().slice(0, 30) + ')');
     await q.close();
   }

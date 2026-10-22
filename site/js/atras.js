@@ -46,7 +46,11 @@ onRender(name => (route = name));
 
 addEventListener('popstate', () => {
   const from = prev; prev = st();
-  if (from && from.sheet) return;                       // se ha cerrado una hoja (o la pregunta la ha vuelto a poner)
+  if (from && from.sheet) {                             // se ha cerrado una hoja (o la pregunta la ha vuelto a poner)
+    // Si se abrió durante el aviso de salir, al cerrarla se anula: la próxima pulsación vuelve a avisar
+    if (st().cz === 'root' && !document.querySelector('.sheet')) { clearTimeout(exitT); exitT = 0; guard(); }
+    return;
+  }
   if (document.querySelector('.sheet')) return;         // con una hoja abierta, Atrás es suyo
   if (st().cz !== 'root') return;                       // un detalle → la pantalla anterior
   if (route && route !== 'inicio') { guard(); return; } // desde otra pantalla principal → Inicio (lo pinta el router)

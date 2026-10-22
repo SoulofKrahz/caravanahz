@@ -7,7 +7,7 @@
 // - Cada versión publicada trae un sw.js distinto; el navegador lo detecta, guarda la nueva en segundo plano y la app
 //   avisa. La recarga nunca ocurre con un formulario a medias (lo decide la app, no el service worker).
 // - Leaflet y las fuentes se guardan aparte (EXT) para no perderlas en cada actualización.
-const V = 'cz-2026-10-22-7';
+const V = 'cz-2026-10-22-8';
 const EXT = 'cz-ext-1';
 // './' y no 'index.html': Cloudflare Pages redirige /index.html → / y una respuesta redirigida no sirve para abrir la página
 const SHELL = ['./', 'css/app.css', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/apple-touch-icon.png',
