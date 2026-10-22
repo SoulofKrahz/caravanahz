@@ -36,14 +36,19 @@ export function render(view) {
 
   // Pedir los km reales justo cuando tocan: al salir y al volver
   const kmAsk = (() => {
-    for (const t of D.trips) {
+    for (const t of D.trips.slice().sort((a, b) => (b.inicio || '').localeCompare(a.inicio || ''))) {
       if (!t.inicio || t.inicio > today) continue;
-      const end = t.fin || t.inicio;
-      if (!t.kmIni && daysBetween(t.inicio, today) <= 3) return { t, which: 'ini' };
-      if (t.kmIni && !t.kmFin && end <= today && daysBetween(end, today) <= 14) return { t, which: 'fin' };
+      if (!t.kmIni && !tripDone(t, today) && daysBetween(t.inicio, today) <= 3) return { t, which: 'ini' };
+      // Con fecha de vuelta ya llegada: se piden los km de vuelta (dos semanas como mucho)
+      if (t.kmIni && !t.kmFin && t.fin && t.fin <= today && daysBetween(t.fin, today) <= 14) return { t, which: 'fin' };
     }
     return null;
   })();
+  // De viaje sin fecha de vuelta: un aviso tranquilo con «He vuelto» (no pregunta cada día si ya has vuelto)
+  // (también si tiene vuelta prevista: por si vuelves antes)
+  const abierto = D.trips.filter(t => t.inicio && t.inicio <= today && !tripDone(t, today)).sort((a, b) => b.inicio.localeCompare(a.inicio))[0];
+  // Si falta apuntar los km de salida de ese mismo viaje, va todo en un único aviso con los dos botones
+  const kmJunto = kmAsk && abierto && kmAsk.t === abierto && kmAsk.which === 'ini';
   // Teléfono de asistencia a mano en Inicio (lo primero que buscas en una avería)
   const asis = D.docs.filter(d => d.tel && (d.tipo === 'Asistencia en carretera' || d.tipo === 'Seguro')).sort((a, b) => (a.tipo === 'Asistencia en carretera' ? -1 : 1))[0];
   const lb = getKV('lastBackup', 0), first = getKV('setupAt', Date.now());
@@ -62,7 +67,8 @@ export function render(view) {
 
   const simple = isSimple();
   const banners = `
-  ${kmAsk ? `<div class="banner"><span>${kmAsk.which === 'ini' ? `<b>¿Has salido hacia ${esc(kmAsk.t.nombre)}?</b> Apunta los km del cuentakilómetros para saber lo que recorres de verdad.` : `<b>¿Ya has vuelto de ${esc(kmAsk.t.nombre)}?</b> Apunta los km y el viaje queda cerrado.`}</span><button id="kma">Apuntar km</button></div>` : ''}
+  ${kmAsk && !kmJunto ? `<div class="banner"><span>${kmAsk.which === 'ini' ? `<b>¿Has salido hacia ${esc(kmAsk.t.nombre)}?</b> Apunta los km del cuentakilómetros para saber lo que recorres de verdad.` : `<b>¿Ya has vuelto de ${esc(kmAsk.t.nombre)}?</b> Apunta los km y el viaje queda cerrado.`}</span><button id="kma">Apuntar km</button></div>` : ''}
+  ${abierto ? `<div class="banner"><span><b>Estás de viaje: ${esc(abierto.nombre)}.</b> Desde el ${fDate(abierto.inicio, { day: 'numeric', month: 'long' })}${(n => n ? ` (llevas ${n} ${n === 1 ? 'noche' : 'noches'})` : '')(daysBetween(abierto.inicio, today))}. ${abierto.fin ? (abierto.fin === today ? ' Vuelves hoy.' : ` Vuelves el ${fDate(abierto.fin, { weekday: 'long', day: 'numeric', month: 'long' })}.`) : ''} ${kmJunto ? ' Apunta los km con los que saliste y, cuando vuelvas, toca «He vuelto».' : ' Cuando vuelvas, toca «He vuelto».'}</span>${kmJunto ? '<button id="kma">Km de salida</button>' : ''}<button id="hv">He vuelto</button></div>` : ''}
   ${needsProfilePlan() ? `<div class="banner"><span><b>Plan específico para tu Ducato 1.9 TD.</b> Sustituye los intervalos genéricos (aceite cada 10.000 km, distribución cada 60.000 km o 3 años, sellado de la capuchina…). Conserva lo que ya hayas apuntado.</span><button id="pp">Aplicar</button></div>` : ''}
   ${showInst ? `<div class="banner" id="ib"><span>${esc(bannerText())}</span>${canPrompt() ? '<button id="ig">Instalar</button>' : ''}<button id="iz">${canPrompt() ? 'Ahora no' : 'Entendido'}</button></div>` : ''}
   ${needBk ? `<div class="banner"><span>${lb ? `Hace ${Math.floor((Date.now() - lb) / 864e5)} días de tu última copia de seguridad.` : 'Aún no has hecho ninguna copia de seguridad.'} Tus datos solo están en este móvil: si se pierde o se rompe, se pierden.</span><button id="bk">Hacer copia</button><button id="bkz">Más tarde</button></div>` : ''}`;
@@ -146,6 +152,7 @@ export function render(view) {
   view.querySelectorAll('[data-d]').forEach(b => (b.onclick = () => docSheet(D.docs.find(d => d.id === b.dataset.d))));
   const ndb = view.querySelector('#nd'); if (ndb) ndb.onclick = () => go('mant/completar');
   const nd2 = view.querySelector('#nd2'); if (nd2) nd2.onclick = () => docSheet({});
+  const hv = view.querySelector('#hv'); if (hv) hv.onclick = () => tripKmSheet(abierto, 'fin', () => render(view));
   const kma = view.querySelector('#kma'); if (kma) kma.onclick = () => tripKmSheet(kmAsk.t, kmAsk.which, () => render(view));
   const pp = view.querySelector('#pp');
   if (pp) pp.onclick = async () => { const r = await applyProfilePlan(); toast(`Plan adaptado: ${r.upd} tareas actualizadas, ${r.add} nuevas${r.rem ? ', ' + r.rem + ' retiradas' : ''}`); if (r.add) go('mant/completar'); else render(view); };
@@ -159,7 +166,7 @@ function tripRow(t, tag) {
   const n = nightsOf(t), today = isoToday(), short = { weekday: 'short', day: 'numeric', month: 'short' };
   const d = !t.inicio ? 'Sin fecha'
     : t.inicio > today ? `sales ${rel(t.inicio)} (${fDate(t.inicio, short)})`
-    : tag === 'En curso' ? (t.fin ? (t.fin === today ? 'vuelves hoy' : `vuelves ${rel(t.fin)}`) : `desde el ${fDate(t.inicio, { day: 'numeric', month: 'short' })}`)
+    : tag === 'En curso' ? (t.fin ? (t.fin === today ? 'vuelves hoy' : `vuelves ${rel(t.fin)}`) : `desde el ${fDate(t.inicio, { day: 'numeric', month: 'short' })}, sin fecha de vuelta`)
     : fDate(t.inicio);
   return `<a class="row" href="#/viaje/${t.id}"><span class="ico">${icon('map')}</span><span class="m"><b>${esc(t.nombre)}</b><small>${tag} · ${esc(d)}${+t.kmRuta ? ' · ' + fKm(t.kmRuta) : ''}${n ? ' · ' + n + (n === 1 ? ' noche' : ' noches') : ''}</small></span>${icon('right')}</a>`;
 }

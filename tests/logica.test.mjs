@@ -48,7 +48,7 @@ a(L.monthsBetween('2025-11-15','2026-02-01').join()==='2025-11,2025-12,2026-01,2
 const cb=L.costBreakdown([{fecha:'2026-01-15',cat:'Seguro',importe:400},{fecha:'2026-02-01',cat:'Combustible',importe:80},{fecha:'2026-02-03',cat:'Mantenimiento',importe:145},{fecha:'2025-12-01',cat:'Peajes',importe:10}],'2026-01-01','2026-12-31');
 a(cb.total===625 && cb.grupos.fijos===400 && cb.grupos.uso===80 && cb.grupos.mant===145 && cb.cats[0][0]==='Seguro','gasto por grupos');
 const N=new Set(['area','camping','libre']);
-a(L.nightsIn([{inicio:'2026-07-12',fin:'2026-07-26'},{inicio:'2026-12-28',fin:'2027-01-03'},{inicio:'2026-03-01',paradas:[{tipo:'area'},{tipo:'visita'},{tipo:'libre'}]}],'2026-01-01','2026-12-31',N)===14+3+2,'noches fuera en el año (viaje que cruza el año se parte)');
+a(L.nightsIn([{inicio:'2026-07-12',fin:'2026-07-26'},{inicio:'2026-12-28',fin:'2027-01-03'},{inicio:'2026-03-01',fin:'2026-03-01',paradas:[{tipo:'area'},{tipo:'visita'},{tipo:'libre'}]}],'2026-01-01','2026-12-31',N)===14+3+2,'noches fuera en el año (viaje que cruza el año se parte)');
 a(Math.round(L.delta(120,100))===20 && L.delta(5,0)===null,'variación porcentual');
 const fc=L.maintForecast([{t:{id:'x'},s:{state:'over',when:'2026-01-01'}},{t:{id:'y'},s:{state:'ok',when:'2027-03-01'}},{t:{id:'z'},s:{state:'ok',when:'2028-01-01'}}],[{tareaId:'x',fecha:'2025-01-01',coste:145}],'2026-10-21',12);
 a(fc.items.length===2 && fc.known===145 && fc.unknown===1,'previsión de mantenimiento a 12 meses');
@@ -57,6 +57,10 @@ const Ds={odo:[{fecha:'2026-10-21',km:1000,id:'s',aprox:true}],expenses:[],servi
 a(L.kmBetween(Ds,'2026-01-01','2026-12-31')===1000,'viaje de ida y vuelta en el mismo día cuenta sus 1.000 km');
 a(L.kmBetween(Ds,'2026-10-21','2026-10-21')===1000,'km del día con salida y llegada el mismo día');
 a(L.tripDone({kmFin:2000,fin:'2026-10-21'},'2026-10-21') && !L.tripDone({fin:'2026-10-21'},'2026-10-21') && L.tripDone({fin:'2026-10-20'},'2026-10-21'),'viaje con km de vuelta = hecho aunque la vuelta sea hoy');
+a(L.tripDone({inicio:'2026-10-22',fin:'2026-10-22',cerrado:true},'2026-10-22') && !L.tripDone({inicio:'2026-10-01'},'2026-10-22') && L.tripOpen({inicio:'2026-10-01'},'2026-10-22') && !L.tripOpen({inicio:'2026-10-01',fin:'2026-10-30'},'2026-10-22'),'viaje sin fecha de vuelta: sigue abierto los días siguientes');
+a(L.nightsIn([{inicio:'2026-10-18'}],'2026-01-01','2026-10-22',new Set(['area']),'2026-10-22')===4,'viaje abierto: cuenta las noches hasta hoy');
+a((L.tripOn([{id:'a',inicio:'2026-10-22',fin:'2026-10-22',kmFin:5},{id:'b',inicio:'2026-10-22'}],'2026-10-22','2026-10-22')||{}).id==='b','gasto del día en que uno acaba y otro empieza: va al que sigue en marcha');
+a(L.tripOn([{id:'b',inicio:'2026-10-18'}],'2026-10-10','2026-10-22')===null && (L.tripOn([{id:'b',inicio:'2026-10-18'}],'2026-10-20','2026-10-22')||{}).id==='b','gasto antes de salir: sin viaje; durante: al viaje abierto');
 const Dx={odo:[{fecha:'2026-10-21',km:145000,id:'s',aprox:true}],expenses:[],services:[],trips:[],kv:{}};
 a(L.kmCheck(Dx,'2026-10-10',1000) && L.kmCheck(Dx,'2026-10-10',1000).tipo==='salto','1.000 km hace 11 días con una autocaravana que hoy marca 145.000: rechazado');
 a(L.kmCheck(Dx,'2026-09-21',141000)===null,'lectura real anterior a la configuración (141.000 hace un mes): aceptada');

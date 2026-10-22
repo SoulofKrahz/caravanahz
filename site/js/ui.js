@@ -6,15 +6,15 @@ export const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const icon = (id, cls = '') => `<svg class="i ${cls}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
 
-const nf1 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 });
-const nf0 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 });
-const eur = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
+const nf1 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1, useGrouping: 'always' });
+const nf0 = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0, useGrouping: 'always' });
+const eur = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', useGrouping: 'always' });
 export const fKm = n => (n || n === 0 ? nf0.format(n) + ' km' : '—');
-export const fNum = (n, d = 1) => (n || n === 0 ? new Intl.NumberFormat('es-ES', { maximumFractionDigits: d }).format(n) : '—');
+export const fNum = (n, d = 1) => (n || n === 0 ? new Intl.NumberFormat('es-ES', { maximumFractionDigits: d, useGrouping: 'always' }).format(n) : '—');
 /** Precio por litro, siempre con 3 decimales como en el surtidor: 1,600 */
 export const fPpl = n => (+n).toLocaleString('es-ES', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 export const fEur = n => eur.format(+n || 0);
-export const fEur0 = n => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(+n || 0);
+export const fEur0 = n => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0, useGrouping: 'always' }).format(+n || 0);
 export const fDate = (iso, o = { day: 'numeric', month: 'short', year: 'numeric' }) => (iso ? parseISO(iso).toLocaleDateString('es-ES', o).replace('.', '') : '—');
 export const fMonth = iso => parseISO(iso).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
 export const fDur = min => { if (!min && min !== 0) return '—'; const h = Math.floor(min / 60), m = Math.round(min % 60); return h ? `${h} h ${m} min` : `${m} min`; };

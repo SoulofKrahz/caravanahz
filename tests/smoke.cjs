@@ -216,6 +216,103 @@ async function run(browser, label, viewport, mobile) {
   await p.goto(BASE + '#/ajustes/apariencia'); await p.waitForTimeout(300);
   ok(!(await p.innerText('#view')).includes('Vista previa'), 'tamaño del texto sin vista previa redundante');
 
+  // 10) Viaje sin fecha de vuelta: se sale sin saber cuándo se vuelve y todo sigue funcionando
+  const L = (fn, arg) => p.evaluate(fn, arg);
+  const hoy = await L(() => import('./js/logic.js').then(m => m.isoToday()));
+  const diasAtras = n => L(n => import('./js/logic.js').then(m => m.addDays(m.isoToday(), -n)), n);
+  const txt = async sel => (await p.innerText(sel)).replace(/ /g, ' ');
+  // 10a) Crear el viaje saliendo hoy, sin vuelta
+  await p.goto(BASE + '#/viajes'); await p.waitForTimeout(300);
+  await p.click('#add'); await p.waitForTimeout(300);
+  await p.fill('.sheet [name=nombre]', 'Ruta abierta'); await p.fill('.sheet [name=inicio]', hoy); await save(); await p.waitForTimeout(1000);
+  ok(p.url().includes('#/viaje/') && (await txt('#tm')).includes('sin fecha de vuelta'), 'abierto: se crea saliendo hoy sin fecha de vuelta');
+  const rid = p.url().split('/').pop();
+  await p.click('#kmr [data-km=ini]'); await p.waitForTimeout(300); await p.fill('.sheet [name=km]', '147.500'); await save();
+  ok((await txt('#kmr')).includes('Sin fecha de vuelta'), 'abierto: con km de salida, «Al volver» espera a que llegues');
+  // 10b) Inicio: aviso «Estás de viaje» con «He vuelto», sin preguntar si ya has vuelto
+  await p.goto(BASE + '#/inicio'); await p.waitForTimeout(400);
+  let ini = await txt('#view');
+  ok(ini.includes('Estás de viaje: Ruta abierta') && await p.locator('#hv').count() === 1 && !ini.includes('¿Ya has vuelto'), 'abierto: Inicio dice «Estás de viaje» con botón «He vuelto»');
+  ok(/Ruta abierta\s*En curso · desde el .*sin fecha de vuelta/.test(ini), 'abierto: Inicio lo pone «En curso»');
+  // 10c) Un repostaje apuntado desde Inicio va solo al viaje
+  if (mobile) { await p.click('#qf'); } else { await p.click('#qf'); }
+  await p.waitForTimeout(300);
+  ok((await txt('.sheet [data-trip]')).includes('Ruta abierta'), 'abierto: el repostaje nuevo dice que se apunta en el viaje');
+  await p.fill('.sheet [name=litros]', '30'); await p.fill('.sheet [name=ppl]', '1,6'); await p.fill('.sheet [name=km]', '147.700'); await save();
+  ok((await Dm()).expenses.some(e => e.km === 147700 && e.viajeId === rid), 'abierto: el repostaje queda asignado al viaje');
+  // 10d) Pasan los días (se simula moviendo la salida 5 días atrás): sigue en curso, no «hecho»
+  const hace5 = await diasAtras(5);
+  await L(async ([id, f]) => { const db = await import('./js/db.js'); const t = db.D.trips.find(x => x.id === id); t.inicio = f; await db.put('trips', t); }, [rid, hace5]);
+  // y los km de salida de hace 5 días no pueden ser más que los de hoy: se ajustan a uno anterior al repostaje
+  await L(async id => { const db = await import('./js/db.js'); const t = db.D.trips.find(x => x.id === id); t.kmIni = 147100; await db.put('trips', t); }, rid);
+  await p.goto(BASE + '#/viajes'); await p.waitForTimeout(400);
+  const lv = await txt('#view');
+  ok(lv.indexOf('Ruta abierta') > -1 && (lv.indexOf('Hechos') < 0 || lv.indexOf('Ruta abierta') < lv.indexOf('Hechos')) && lv.includes('de viaje, sin fecha de vuelta'), 'abierto: a los 5 días sigue en «Próximos y en curso» (antes pasaba a «Hechos»)');
+  await p.goto(BASE + '#/inicio'); await p.waitForTimeout(400);
+  ok((await txt('.banner:has(#hv)')).includes('(llevas 5 noches)'), 'abierto: Inicio cuenta las noches que llevas fuera (5)');
+  // 10e) Un gasto de hace 3 días también va al viaje; uno de hace 10 días, no
+  await p.click('#qg'); await p.waitForTimeout(300);
+  await p.fill('.sheet [name=fecha]', await diasAtras(3)); await p.dispatchEvent('.sheet [name=fecha]', 'change'); await p.waitForTimeout(100);
+  ok((await txt('.sheet [data-trip]')).includes('Ruta abierta'), 'abierto: un gasto de hace 3 días se apunta en el viaje');
+  await p.fill('.sheet [name=fecha]', await diasAtras(10)); await p.dispatchEvent('.sheet [name=fecha]', 'change'); await p.waitForTimeout(100);
+  ok(await p.locator('.sheet [data-trip]').isHidden(), 'abierto: un gasto de antes de salir no se apunta en el viaje');
+  await p.fill('.sheet [name=fecha]', await diasAtras(3)); await p.dispatchEvent('.sheet [name=fecha]', 'change');
+  await p.fill('.sheet [name=importe]', '18'); await p.fill('.sheet [name=concepto]', 'Área de Cangas'); await save();
+  // 10f) Estadísticas: cuenta las noches del viaje en curso; el viaje aún no está entre los terminados
+  await p.goto(BASE + '#/stats'); await p.waitForTimeout(400);
+  ok(await p.locator('.kpis').count() === 1, 'abierto: Estadísticas se abre con un viaje en curso');
+  // 10g) «He vuelto» desde Inicio: fecha de hoy y km obligatorios (hay km de salida)
+  await p.goto(BASE + '#/inicio'); await p.waitForTimeout(400);
+  await p.click('#hv'); await p.waitForTimeout(300);
+  ok((await p.inputValue('.sheet [name=fin]')) === hoy, '«He vuelto»: la fecha de vuelta viene puesta con hoy');
+  await save();
+  ok((await errsIn()).some(t => t.includes('km')), '«He vuelto»: con km de salida, pide los de vuelta');
+  await p.fill('.sheet [name=km]', '148.300'); await save();
+  ok(await p.locator('.sheet').count() === 0 && !(await txt('#view')).includes('Estás de viaje'), '«He vuelto»: viaje cerrado y desaparece el aviso');
+  await p.goto(BASE + '#/viaje/' + rid); await p.waitForTimeout(600);
+  { const k = await txt('#kmr'), m = await txt('#tm'); ok(k.includes('1.200 km recorridos') && m.includes('5 noches'), 'cerrado: 1.200 km recorridos y 5 noches' + (k.includes('1.200 km recorridos') && m.includes('5 noches') ? '' : ` [${k.replace(/\n/g, ' / ')} | ${m}]`)); }
+  ok((await txt('#gl')).includes('Área de Cangas'), 'cerrado: los gastos del viaje están en su lista');
+  await p.goto(BASE + '#/viajes'); await p.waitForTimeout(300);
+  const lv2 = await txt('#view');
+  ok(lv2.indexOf('Ruta abierta') > lv2.indexOf('Hechos'), 'cerrado: pasa a «Hechos»');
+  // 10h) Viaje sin km de salida, con salida ya pasada: pregunta «¿Sigues de viaje?»
+  await p.click('#add'); await p.waitForTimeout(300);
+  await p.fill('.sheet [name=nombre]', 'Escapada sin km'); await p.fill('.sheet [name=inicio]', await diasAtras(2)); await save();
+  ok(await p.locator('.ask').count() === 1 && (await txt('.ask')).includes('¿Sigues de viaje?'), 'salida pasada sin vuelta: pregunta «¿Sigues de viaje?»');
+  await p.click('.ask [data-no]'); await p.waitForTimeout(300);
+  ok(await p.locator('.sheet').count() === 1 && await p.evaluate(() => document.activeElement && document.activeElement.name === 'fin'), '«Ya volví»: se queda en el formulario con el cursor en la vuelta');
+  await p.click('.sheet [data-save]'); await p.waitForTimeout(300); await p.click('.ask [data-ok]'); await p.waitForTimeout(1200);
+  const eid = p.url().split('/').pop();
+  ok(p.url().includes('#/viaje/') && (await txt('#kmr')).includes('He vuelto'), '«Sí, sigo de viaje»: viaje abierto, con «He vuelto» aunque no haya km de salida');
+  await p.click('#kmr [data-km=fin]'); await p.waitForTimeout(300);
+  ok((await txt('.sheet')).includes('opcional'), '«He vuelto» sin km de salida: los km son opcionales');
+  await save();
+  ok(await p.locator('.sheet').count() === 0 && (await txt('#kmr')).includes('Volviste el'), 'se cierra sin km: «Volviste el…»');
+  ok((await Dm()).trips.find(t => t.id === eid).fin === hoy, 'la fecha de vuelta queda guardada');
+  // 10i) Al día siguiente no vuelve a preguntar «¿Has salido?» por un viaje ya cerrado sin km
+  await p.goto(BASE + '#/inicio'); await p.waitForTimeout(300);
+  ok(!(await txt('#view')).includes('Escapada sin km?'), 'viaje cerrado sin km: Inicio no pregunta por él');
+  // 10j) Poner una vuelta futura y quitarla: «vuelves en…» y vuelve a preguntar si sigues de viaje
+  await p.goto(BASE + '#/viaje/' + eid); await p.waitForTimeout(500);
+  await p.click('#meta'); await p.waitForTimeout(300);
+  await p.fill('.sheet [name=fin]', ''); await save();
+  ok(await p.locator('.ask').count() === 1, 'quitar la vuelta de un viaje pasado pregunta si sigues de viaje');
+  await p.click('.ask [data-ok]'); await p.waitForTimeout(500);
+  ok((await txt('#tm')).includes('sin fecha de vuelta'), 'quitada la vuelta, el viaje vuelve a estar en curso');
+  // 10k) Vuelta prevista para dentro de 3 días pero vuelves antes: «He vuelto» desde Inicio lo cierra hoy
+  await L(async id => { const db = await import('./js/db.js'); const t = db.D.trips.find(x => x.id === id); t.cerrado = true; t.fin = t.inicio; await db.put('trips', t); }, eid); // cierra el anterior
+  await p.goto(BASE + '#/viajes'); await p.waitForTimeout(300);
+  await p.click('#add'); await p.waitForTimeout(300);
+  await p.fill('.sheet [name=nombre]', 'Vuelta prevista'); await p.fill('.sheet [name=inicio]', await diasAtras(2));
+  await p.fill('.sheet [name=fin]', await L(() => import('./js/logic.js').then(m => m.addDays(m.isoToday(), 3)))); await save(); await p.waitForTimeout(1000);
+  ok(await p.locator('.ask').count() === 0 && p.url().includes('#/viaje/'), 'con vuelta prevista no pregunta «¿Sigues de viaje?»');
+  const vid = p.url().split('/').pop();
+  await p.goto(BASE + '#/inicio'); await p.waitForTimeout(400);
+  ok((await txt('.banner:has(#hv)')).includes('Vuelta prevista') && (await txt('.banner:has(#hv)')).includes('Vuelves el'), 'en curso con vuelta prevista: Inicio dice cuándo vuelves y ofrece «He vuelto»');
+  await p.click('#hv'); await p.waitForTimeout(300); await save();
+  const vt = (await Dm()).trips.find(t => t.id === vid);
+  ok(vt.fin === hoy && vt.cerrado && await p.locator('#hv').count() === 0, 'vuelves antes: el viaje se cierra con la fecha de hoy');
+
   ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await ctx.close();
 }

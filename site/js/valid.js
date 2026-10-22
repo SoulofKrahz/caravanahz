@@ -14,7 +14,7 @@ import { isoToday, addMonths } from './logic.js';
    check: (valor, todos) => 'mensaje' | null
    norm: valor => valor       normaliza antes de comprobar y guardar */
 
-const nf = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 });
+const nf = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2, useGrouping: 'always' });
 const n0 = v => nf.format(v);
 const fd = iso => { const [y, m, d] = iso.split('-'); return `${+d}/${+m}/${y}`; };
 export const normText = s => String(s ?? '').replace(/\s+/g, ' ').trim();

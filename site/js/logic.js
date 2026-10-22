@@ -101,7 +101,20 @@ export function kmBetween(D, from = '', to = '9999-12-31') {
 }
 
 /** Un viaje está hecho cuando ya has apuntado los km de vuelta o su fecha de vuelta ya pasó */
-export const tripDone = (t, today = isoToday()) => !!t.kmFin || (!!(t.fin || t.inicio) && (t.fin || t.inicio) < today);
+/**
+ * ¿Viaje terminado? Con km de vuelta, sí; con fecha de vuelta, cuando ya ha pasado.
+ * Sin fecha de vuelta, el viaje sigue abierto (estás de viaje) hasta que apuntes que has vuelto:
+ * se puede salir sin saber cuándo se vuelve.
+ */
+export const tripDone = (t, today = isoToday()) => !!t.kmFin || !!t.cerrado || (!!t.fin && t.fin < today);
+/** Viaje en marcha sin fecha de vuelta */
+export const tripOpen = (t, today = isoToday()) => !!t.inicio && t.inicio <= today && !t.fin && !t.kmFin && !t.cerrado;
+/** Viaje en el que cae una fecha (para asignarle un gasto): la salida ya ha llegado y la vuelta no ha pasado (o no tiene) */
+export function tripOn(trips, fecha, today = isoToday()) {
+  return trips.filter(t => t.inicio && t.inicio <= fecha && (t.fin ? fecha <= t.fin : !t.kmFin && !t.cerrado && fecha <= today))
+    // El mismo día en que uno termina y otro empieza, gana el que sigue en marcha
+    .sort((a, b) => tripDone(a, today) - tripDone(b, today) || b.inicio.localeCompare(a.inicio))[0] || null;
+}
 
 /** Kilometraje actual: el mayor de todos los registrados */
 export function currentKm(D) {
@@ -313,12 +326,14 @@ export function series(D, keys, unit = 'm') {
 }
 
 /** Noches fuera en [from, to]: por fechas del viaje, o por pernoctas marcadas si no hay vuelta */
-export function nightsIn(trips, from, to, nightTypes) {
+export function nightsIn(trips, from, to, nightTypes, today = isoToday()) {
   let n = 0;
   trips.forEach(t => {
     if (!t.inicio || t.inicio > to) return;
-    if (t.fin && t.fin > t.inicio) {
-      const a = t.inicio < from ? from : t.inicio, b = t.fin > to ? to : t.fin;
+    // Viaje abierto (sin fecha de vuelta): cuentan las noches pasadas hasta hoy
+    const end = t.fin || (tripOpen(t, today) ? today : '');
+    if (end && end > t.inicio) {
+      const a = t.inicio < from ? from : t.inicio, b = end > to ? to : end;
       if (b > a) n += daysBetween(a, b);
     } else if (t.inicio >= from) n += (t.paradas || []).filter(p => nightTypes.has(p.tipo)).length;
   });

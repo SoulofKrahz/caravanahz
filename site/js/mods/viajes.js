@@ -3,7 +3,7 @@ import { D, put, del, uid } from '../db.js';
 import { $, esc, icon, fKm, fDate, fDur, fEur, fNum, fPpl, rel, sheet, form, toast, undo, ask } from '../ui.js';
 import { onSubmit, normKey, normText, R } from '../valid.js';
 import { STOP_TIPOS, NIGHT, prefs, vehicle } from '../store.js';
-import { isoToday, haversine, consumption, lastFuelPrice, daysBetween, addMonths, currentKm, tripCost, eur100Of, tripDone } from '../logic.js';
+import { isoToday, haversine, consumption, lastFuelPrice, daysBetween, addMonths, currentKm, tripCost, eur100Of, tripDone, tripOpen } from '../logic.js';
 import { expenseSheet, kmMsg } from '../forms.js';
 import { go, refresh } from '../router.js';
 
@@ -17,7 +17,7 @@ export function render(view, params) {
   const pl = (n, a, b) => `${n} ${n === 1 ? a : b}`;
   const row = t => { const n = nightsOf(t), tc = tripCost(t, D, e100), real = t.kmIni && t.kmFin;
     return `<div class="trow"><a class="row" href="#/viaje/${t.id}"><span class="ico">${icon('map')}</span><span class="m"><b>${esc(t.nombre)}</b>
-      <small>${t.inicio ? fDate(t.inicio) + (t.inicio > today ? ' (' + rel(t.inicio) + ')' : '') : 'Sin fecha'} · ${kmOf(t) ? fKm(kmOf(t)) + (real ? '' : ' previstos') : pl((t.paradas || []).length, 'parada', 'paradas')}${n ? ' · ' + pl(n, 'noche', 'noches') : ''}</small></span>
+      <small>${t.inicio ? fDate(t.inicio) + (t.inicio > today ? ' (' + rel(t.inicio) + ')' : tripOpen(t, today) ? ' · de viaje, sin fecha de vuelta' : '') : 'Sin fecha'} · ${kmOf(t) ? fKm(kmOf(t)) + (real ? '' : ' previstos') : pl((t.paradas || []).length, 'parada', 'paradas')}${n ? ' · ' + pl(n, 'noche', 'noches') : ''}</small></span>
       <span class="r">${tc.total && tripDone(t, today) ? `<b>${fEur(tc.total)}</b>${tc.estimated ? '<small>coste ≈</small>' : ''}` : ''}</span></a>
       <button class="ib" data-del="${t.id}" aria-label="Borrar el viaje ${esc(t.nombre)}" title="Borrar">${icon('trash')}</button></div>`; };
 
@@ -31,7 +31,12 @@ export function render(view, params) {
   view.querySelectorAll('[data-del]').forEach(b => (b.onclick = () => deleteTrip(D.trips.find(t => t.id === b.dataset.del))));
   if (params[0] === 'nuevo') { history.replaceState(null, '', '#/viajes'); tripMeta(); }
 }
-export const nightsOf = t => { if (t.inicio && t.fin && t.fin > t.inicio) return daysBetween(t.inicio, t.fin); return (t.paradas || []).filter(p => NIGHT.has(p.tipo)).length; };
+export const nightsOf = (t, today = isoToday()) => {
+  if (t.inicio && t.fin && t.fin > t.inicio) return daysBetween(t.inicio, t.fin);
+  const st = (t.paradas || []).filter(p => NIGHT.has(p.tipo)).length;
+  // Viaje abierto (sin fecha de vuelta): las noches que llevas fuera, o las planificadas si son más
+  return tripOpen(t, today) ? Math.max(daysBetween(t.inicio, today), st) : st;
+};
 
 /* ---------- Datos generales del viaje ---------- */
 const metaF = t => [
@@ -63,6 +68,12 @@ function tripMeta(t = {}) {
         if (!er.length && t.kmFin) er.push({ k: 'fin', msg: kmMsg(v.fin, t.kmFin, t.id) });
         return er;
       }, async v => {
+        // Salida ya pasada y sin vuelta: el viaje quedará abierto («estás de viaje»). Se confirma, por si fue una escapada ya hecha.
+        if (v.inicio && v.inicio < isoToday() && !v.fin && !t.kmFin && (isNew || t.fin || t.inicio !== v.inicio)) {
+          const sigo = await ask({ title: '¿Sigues de viaje?', text: `Sales el ${fDate(v.inicio)} y no has puesto la vuelta. El viaje quedará en curso hasta que apuntes que has vuelto.`, ok: 'Sí, sigo de viaje', cancel: 'Ya volví: pongo la fecha' });
+          if (!sigo) { const f = s.el.querySelector('[name=fin]'); if (f) { f.focus(); f.scrollIntoView({ block: 'center' }); } return ''; }
+        }
+        if (!isNew && t.cerrado && !t.kmFin && (!v.fin || v.fin > isoToday())) delete t.cerrado;
         const rec = isNew ? await put('trips', { paradas: [], ...v }) : await put('trips', Object.assign(t, v));
         await s.close();
         if (isNew) go('viaje/' + rec.id); else { toast('Viaje guardado'); refresh(); }
@@ -101,31 +112,34 @@ export function tripKmSheet(t, which, done) {
   const F = ini
     ? [{ k: 'km', l: 'Km al salir', t: 'number', ...R.km, req: 'Indica los km del cuentakilómetros', help: cur ? `Último dato: ${fKm(cur)}` : '' }]
     : [{ k: 'fin', l: 'Fecha de vuelta', t: 'date', req: 'Indica cuándo volviste', past: true, minDate: t.inicio, help: t.fin && t.fin !== today ? 'Si volviste antes o después de lo previsto, cámbiala' : '' },
-       { k: 'km', l: 'Km al volver', t: 'number', ...R.km, req: 'Indica los km del cuentakilómetros', help: `Al salir: ${fKm(t.kmIni)}` }];
+       t.kmIni ? { k: 'km', l: 'Km al volver', t: 'number', ...R.km, req: 'Indica los km del cuentakilómetros', help: `Al salir: ${fKm(t.kmIni)}` }
+         : { k: 'km', l: 'Km al volver (opcional)', t: 'number', ...R.km, help: cur ? `Último dato: ${fKm(cur)}. Sin los km de salida no puedo saber lo recorrido, pero ayudan al resto de cálculos` : '' }];
   const val = ini ? { km: t.kmIni || (t.inicio === today && cur ? cur : '') } : { fin: t.kmFin ? t.fin : t.fin && t.fin <= today ? t.fin : today, km: t.kmFin || '' };
-  const has = ini ? t.kmIni : t.kmFin;
+  const has = ini ? t.kmIni : t.kmFin || t.cerrado;
   sheet({
-    title: ini ? 'Km al salir · ' + fDate(t.inicio) : 'Km al volver', body: form(F, val),
-    foot: `${has ? `<button class="btn d" data-del>${icon('trash')}Borrar</button>` : ''}<button class="btn" data-save>${icon('check')}Guardar</button>`,
+    title: ini ? 'Km al salir · ' + fDate(t.inicio) : t.kmIni ? 'He vuelto: km al volver' : 'He vuelto', body: form(F, val),
+    foot: `${has ? `<button class="btn d" data-del>${icon('trash')}${!ini && !t.kmFin ? 'Aún no he vuelto' : 'Borrar'}</button>` : ''}<button class="btn" data-save>${icon('check')}Guardar</button>`,
     onMount: s => {
       onSubmit(s, F, v => {
         if (ini) {
           if (t.kmFin && v.km > t.kmFin) return [{ k: 'km', msg: `No pueden ser más que al volver (${fKm(t.kmFin)})` }];
           return [{ k: 'km', msg: kmMsg(t.inicio, v.km, t.id) }];
         }
-        if (v.km < t.kmIni) return [{ k: 'km', msg: `No pueden ser menos que al salir (${fKm(t.kmIni)})` }];
-        if (v.km - t.kmIni > 30000) return [{ k: 'km', msg: `Son ${fKm(v.km - t.kmIni)} en un viaje: revisa la cifra` }];
+        if (v.km === '') return [];
+        if (t.kmIni && v.km < t.kmIni) return [{ k: 'km', msg: `No pueden ser menos que al salir (${fKm(t.kmIni)})` }];
+        if (t.kmIni && v.km - t.kmIni > 30000) return [{ k: 'km', msg: `Son ${fKm(v.km - t.kmIni)} en un viaje: revisa la cifra` }];
         return [{ k: 'km', msg: kmMsg(v.fin, v.km, t.id) }];
       }, async v => {
-        if (ini) t.kmIni = v.km; else { t.kmFin = v.km; t.fin = v.fin; }
+        // «He vuelto» cierra el viaje aunque sea hoy y sin km (si no, seguiría «en curso» hasta mañana)
+        if (ini) t.kmIni = v.km; else { if (v.km !== '') t.kmFin = v.km; else delete t.kmFin; t.fin = v.fin; t.cerrado = true; }
         await put('trips', t);
-        await s.close(); toast(ini ? 'Km de salida apuntados' : `Viaje cerrado: ${fKm(t.kmFin - t.kmIni)} recorridos`); done();
+        await s.close(); toast(ini ? 'Km de salida apuntados' : t.kmIni && t.kmFin ? `Viaje cerrado: ${fKm(t.kmFin - t.kmIni)} recorridos` : 'Viaje cerrado. ¡Bienvenido a casa!'); done();
       });
       const d = s.el.querySelector('[data-del]');
       if (d) d.onclick = async () => {
-        const both = ini && t.kmFin;
-        if (!(await ask({ title: both ? '¿Borrar los km de salida y de vuelta?' : '¿Borrar estos km?', text: both ? 'Sin los km de salida, los de vuelta no sirven y se borran también.' : '', ok: 'Sí, borrar', cancel: 'No', danger: true }))) return;
-        if (ini) { delete t.kmIni; delete t.kmFin; } else delete t.kmFin;
+        const both = ini && t.kmFin, reopen = !ini && !t.kmFin;
+        if (!(await ask({ title: both ? '¿Borrar los km de salida y de vuelta?' : reopen ? '¿Reabrir el viaje?' : '¿Borrar estos km?', text: both ? 'Sin los km de salida, los de vuelta no sirven y se borran también.' : '', ok: reopen ? 'Sí, sigo de viaje' : 'Sí, borrar', cancel: 'No', danger: !reopen }))) return;
+        if (ini) { delete t.kmIni; delete t.kmFin; } else { delete t.kmFin; delete t.cerrado; }
         await put('trips', t); await s.close(); toast('Km borrados'); done();
       };
     }
@@ -223,7 +237,7 @@ export function renderTrip(view, [id]) {
   const save = () => { clearTimeout(saveT); saveT = setTimeout(() => { if (D.trips.includes(t)) put('trips', t).catch(e => toast('No se ha podido guardar el viaje: ' + (e.message || e))); }, 300); };
   const meta = () => {
     const n = nightsOf(t), real = t.kmIni && t.kmFin ? t.kmFin - t.kmIni : null;
-    $('#tm').textContent = [t.inicio ? fDate(t.inicio) + (t.fin ? ' → ' + fDate(t.fin) : '') : 'Sin fechas', n ? n + (n === 1 ? ' noche' : ' noches') : '', real ? fKm(real) + ' reales' : ''].filter(Boolean).join(' · ');
+    $('#tm').textContent = [t.inicio ? fDate(t.inicio) + (t.fin ? ' → ' + fDate(t.fin) : tripOpen(t) ? ' → de viaje, sin fecha de vuelta' : '') : 'Sin fechas', n ? n + (n === 1 ? ' noche' : ' noches') : '', real ? fKm(real) + ' reales' : ''].filter(Boolean).join(' · ');
   };
 
   function totals() {
@@ -384,10 +398,10 @@ export function renderTrip(view, [id]) {
     if (!t.inicio) { el.innerHTML = `<div class="list"><div class="empty sm">Pon la fecha de salida en «Datos» y aquí podrás apuntar los km al salir y al volver.</div></div>`; return; }
     if (t.inicio > today) { el.innerHTML = `<div class="list"><div class="empty sm">Sales ${rel(t.inicio)}. Ese día, apunta aquí los km del cuentakilómetros.</div></div>`; return; }
     const real = t.kmIni && t.kmFin ? t.kmFin - t.kmIni : null, dif = real && t.kmRuta ? Math.round((real - t.kmRuta) / t.kmRuta * 100) : null;
-    const row = (k, title, sub, val) => `<button class="row" data-km="${k}"><span class="ico">${icon(k === 'ini' ? 'gauge' : 'check')}</span><span class="m"><b>${title}</b><small>${sub}</small></span><span class="r">${val ? `<b>${fKm(val)}</b>` : `<span class="btn sm">Apuntar</span>`}</span></button>`;
+    const row = (k, title, sub, val) => `<button class="row" data-km="${k}"><span class="ico">${icon(k === 'ini' ? 'gauge' : 'check')}</span><span class="m"><b>${title}</b><small>${sub}</small></span><span class="r">${val ? `<b>${fKm(val)}</b>` : `<span class="btn sm${k === 'fin' && t.cerrado ? ' g' : ''}">${k === 'fin' && t.cerrado ? 'Cambiar' : 'Apuntar'}</span>`}</span></button>`;
     el.innerHTML = `<div class="list">
       ${row('ini', 'Al salir', fDate(t.inicio), t.kmIni)}
-      ${t.kmIni ? row('fin', 'Al volver', t.kmFin ? fDate(t.fin) : t.fin && t.fin > today ? 'Vuelves ' + rel(t.fin) + ': apúntalo al llegar' : 'Cuando llegues', t.kmFin) : ''}
+      ${row('fin', t.kmIni ? 'Al volver' : 'He vuelto', t.kmFin ? fDate(t.fin) : t.cerrado && t.fin ? `Volviste el ${fDate(t.fin)}` : t.fin && t.fin > today ? 'Vuelves ' + rel(t.fin) + ': apúntalo al llegar' : t.fin ? `Volviste el ${fDate(t.fin)}${t.kmIni ? ': apunta los km' : ''}` : 'Sin fecha de vuelta: tócalo cuando llegues', t.kmFin)}
       ${real !== null ? `<div class="row"><span class="m"><b>${fKm(real)} recorridos</b><small>${dif !== null ? `La ruta planificada era de ${fKm(t.kmRuta)} (${dif > 0 ? '+' : ''}${dif} %)` : ''}</small></span></div>` : ''}
     </div>`;
     el.querySelectorAll('[data-km]').forEach(b => (b.onclick = () => tripKmSheet(t, b.dataset.km, () => { meta(); kmr(); gl(); totals(); })));

@@ -2,7 +2,7 @@
 // Todas las comprobaciones viven aquí, junto a cada formulario.
 import { D, put, del, uid, setKV } from './db.js';
 import { sheet, form, toast, undo, fKm, fDate, fNum, fPpl, icon, esc, ask, isSimple } from './ui.js';
-import { isoToday, currentKm, kmPoints, kmCheck, addMonths, addDays, lastFuelPrice } from './logic.js';
+import { isoToday, currentKm, kmPoints, tripOn, kmCheck, addMonths, addDays, lastFuelPrice } from './logic.js';
 import { CATS, ZONAS, DOC_TIPOS, vehicle } from './store.js';
 import { PERFIL, ITV_CAT, itvMeses } from './perfil.js';
 import { refresh } from './router.js';
@@ -47,6 +47,9 @@ export function odoSheet() {
 /* ---------- Gasto (incluye repostajes) ---------- */
 export function expenseSheet(e = {}, preset = {}) {
   const isNew = !e.id; e = { fecha: isoToday(), cat: 'Combustible', lleno: true, ...preset, ...e };
+  // De viaje: un gasto nuevo se apunta en el viaje de esa fecha (sin tener que abrir «Más datos»)
+  const auto = isNew && !('viajeId' in preset);
+  if (auto) { const t = tripOn(D.trips, e.fecha); if (t) e.viajeId = t.id; }
   const dep = +vehicle().deposito || 0;
   const trips = [['', '— Ninguno —'], ...D.trips.slice().sort((a, b) => (b.inicio || '').localeCompare(a.inicio || '')).map(t => [t.id, t.nombre + (t.inicio ? ' · ' + fDate(t.inicio, { month: 'short', year: 'numeric' }) : '')])];
   const lastP = lastFuelPrice(D.expenses);
@@ -78,6 +81,15 @@ export function expenseSheet(e = {}, preset = {}) {
       };
       cat.onchange = sync; sync();
       fuelCalc(s.el);
+      // Aviso visible de a qué viaje va el gasto; si cambias la fecha, se recalcula (salvo que hayas elegido tú el viaje)
+      const vSel = s.el.querySelector('[name=viajeId]'), fIn = s.el.querySelector('[name=fecha]');
+      s.body.insertAdjacentHTML('afterbegin', '<p class="fm" data-trip hidden style="margin-bottom:12px"></p>');
+      const tNote = s.el.querySelector('[data-trip]');
+      let mine = !auto;
+      const showTrip = () => { const t = vSel.value && D.trips.find(x => x.id === vSel.value); tNote.hidden = !t; if (t) tNote.innerHTML = `${icon('map')} Se apunta en el viaje <b>${esc(t.nombre)}</b>. ${isNew ? 'Para cambiarlo, abre «Más datos».' : ''}`; };
+      vSel.addEventListener('change', () => { mine = true; showTrip(); });
+      fIn.addEventListener('change', () => { if (mine || !/^\d{4}-\d\d-\d\d$/.test(fIn.value)) return; const t = tripOn(D.trips, fIn.value); vSel.value = t ? t.id : ''; showTrip(); });
+      showTrip();
       if (e.servicioId) s.body.insertAdjacentHTML('afterbegin', `<p class="fm" style="margin-bottom:12px">Este gasto está vinculado a un mantenimiento. Si lo borras, el mantenimiento se queda sin coste.</p>`);
       onSubmit(s, F, v => {
         const er = [];
