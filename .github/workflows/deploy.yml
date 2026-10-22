@@ -17,7 +17,7 @@ jobs:
   test:
     name: Prueba de humo
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -29,9 +29,15 @@ jobs:
         run: node tests/logica.test.mjs | tee /tmp/logica.txt && ! grep -q '^FALLA' /tmp/logica.txt
       - name: Service worker (versión y archivos para usarla sin conexión)
         run: node tests/sw_check.mjs
-      - name: Instalar Playwright y Chromium
-        run: npm i --no-save --no-audit --no-fund playwright@1.55.0 && npx playwright install --with-deps chromium
+      # Se usa el Chrome que ya trae el servidor de GitHub (descargar Chromium y sus dependencias a veces
+      # tarda más de 10 minutos). Si no estuviera, se instala como antes.
+      - name: Instalar Playwright (y Chromium solo si hace falta)
+        timeout-minutes: 12
+        run: |
+          npm i --no-save --no-audit --no-fund playwright@1.55.0
+          if [ -x /usr/bin/google-chrome ]; then echo "PW_EXE=/usr/bin/google-chrome" >> "$GITHUB_ENV"; google-chrome --version; else npx playwright install --with-deps chromium; fi
       - name: Probar la app (móvil y PC)
+        timeout-minutes: 8
         run: node tests/smoke.cjs
   deploy:
     name: Publicar
