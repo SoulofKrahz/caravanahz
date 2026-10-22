@@ -161,7 +161,11 @@ async function run(browser, label, viewport, mobile) {
   await p.goto(BASE + '#/mant/completar'); await p.waitForTimeout(300);
   const row = p.locator('#cl [data-id]:has([data-k])').first(), tid = await row.getAttribute('data-id');
   await row.locator('[data-f]').fill('2024-05-01'); await row.locator('[data-k]').fill('120.000');
-  await p.click('#sv'); await p.waitForTimeout(500);
+  await p.click('#sv', { timeout: 8000 }).catch(async e => {
+    const d = await p.evaluate(async () => { const b = document.querySelector('#sv'), r1 = b.getBoundingClientRect(); await new Promise(r => setTimeout(r, 200)); const r2 = b.getBoundingClientRect();
+      return JSON.stringify({ r1: [r1.x, r1.y, r1.width, r1.height], r2: [r2.x, r2.y, r2.width, r2.height], sy: scrollY, sh: document.documentElement.scrollHeight, ih: innerHeight, act: document.activeElement && document.activeElement.outerHTML.slice(0, 80), cls: document.documentElement.className + '|' + document.body.className }); });
+    ok(false, 'diag #sv ' + d); throw e; });
+  await p.waitForTimeout(500);
   ok((await Dm()).tasks.find(t => t.id === tid).ultKm === 120000, 'completar plan: «120.000» km se guardan como 120.000');
   // 9e) Salir de un viaje antes de que cargue el mapa no rompe nada
   const tr = (await Dm()).trips[0];
