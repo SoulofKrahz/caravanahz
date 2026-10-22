@@ -130,6 +130,45 @@ async function run(browser, label, viewport, mobile) {
   const cfg = await p.evaluate(() => { const svg = document.querySelector('#cfg svg'), cs = getComputedStyle(svg); return { fill: cs.fill, color: cs.color, em: getComputedStyle(document.documentElement).getPropertyValue('--em').trim() }; });
   ok(cfg.fill === 'none', 'icono de Ajustes activo sin relleno (' + cfg.fill + ')');
 
+  // 9) Detalles que en viaje harían daño
+  const Dm = () => p.evaluate(async () => { const m = await import('./js/db.js'); return JSON.parse(JSON.stringify(m.D)); });
+  // 9a) Km de la ficha mal puestos: se pueden corregir a la baja (hasta el último dato real)
+  await p.goto(BASE + '#/ajustes/vehiculo'); await p.waitForTimeout(300);
+  await p.click('#ve'); await p.waitForTimeout(300); await p.fill('.sheet [name=km]', '200.000'); await save();
+  await p.click('#ve'); await p.waitForTimeout(300); await p.fill('.sheet [name=km]', '100.000'); await save();
+  ok((await errsIn()).some(t => t.includes('146.150')), 'km de la ficha: no por debajo del último dato real');
+  await p.fill('.sheet [name=km]', '146.500'); await p.click('.sheet [data-save]'); await p.waitForTimeout(300);
+  ok(await p.locator('.ask').count() === 1, 'corregir km a la baja pide confirmación');
+  await p.click('.ask [data-ok]'); await p.waitForTimeout(500);
+  ok((await p.innerText('#view')).replace(/\u00a0/g, ' ').includes('146.500 km'), 'km de la ficha corregidos de 200.000 a 146.500');
+  // 9b) Importes con punto de miles
+  await p.goto(BASE + '#/gastos/gastos'); await p.waitForTimeout(300);
+  await p.click('#add'); await p.waitForTimeout(300);
+  await p.selectOption('.sheet [name=cat]', 'Mantenimiento'); await p.fill('.sheet [name=importe]', '1.234'); await save();
+  ok((await Dm()).expenses.some(e => e.importe === 1234), 'importe «1.234» se guarda como 1.234 €');
+  // 9c) Botón Atrás con una pregunta abierta: la cancela y la hoja sigue
+  await p.goto(BASE + '#/inicio'); await p.waitForTimeout(300);
+  await p.click('#km'); await p.waitForTimeout(300); await p.fill('.sheet [name=km]', '147000');
+  await p.evaluate(() => history.back()); await p.waitForTimeout(300);
+  ok(await p.locator('.ask').count() === 1, 'Atrás con datos escritos pregunta');
+  await p.evaluate(() => history.back()); await p.waitForTimeout(300);
+  ok(await p.locator('.ask').count() === 0 && await p.locator('.sheet').count() === 1, 'Atrás otra vez cancela la pregunta y la hoja sigue abierta');
+  await closeSheet();
+  ok(await p.locator('.sheet').count() === 0, 'la hoja se cierra después normalmente');
+  // 9d) Completar el plan con km a la española
+  await p.goto(BASE + '#/mant/completar'); await p.waitForTimeout(300);
+  const row = p.locator('#cl [data-id]:has([data-k])').first(), tid = await row.getAttribute('data-id');
+  await row.locator('[data-f]').fill('2024-05-01'); await row.locator('[data-k]').fill('120.000');
+  await p.click('#sv'); await p.waitForTimeout(500);
+  ok((await Dm()).tasks.find(t => t.id === tid).ultKm === 120000, 'completar plan: «120.000» km se guardan como 120.000');
+  // 9e) Salir de un viaje antes de que cargue el mapa no rompe nada
+  const tr = (await Dm()).trips[0];
+  await p.goto(BASE + '#/viaje/' + tr.id); await p.evaluate(() => (location.hash = '#/inicio')); await p.waitForTimeout(800);
+  ok(await p.locator('#view .vh').count() === 1, 'salir rápido de un viaje deja la pantalla bien');
+  // 9f) Apariencia: sin vista previa redundante del tamaño de letra
+  await p.goto(BASE + '#/ajustes/apariencia'); await p.waitForTimeout(300);
+  ok(!(await p.innerText('#view')).includes('Vista previa'), 'tamaño del texto sin vista previa redundante');
+
   ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await ctx.close();
 }

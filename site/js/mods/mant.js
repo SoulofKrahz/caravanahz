@@ -2,7 +2,7 @@ import { D, put, del } from '../db.js';
 import { esc, icon, fKm, fDate, fEur, rel, stChip, sheet, toast, undo, fNum, isSimple } from '../ui.js';
 import { ctx, tasksWithStatus, ZONA_ICO, vehicle } from '../store.js';
 import { FUENTE_TXT } from '../perfil.js';
-import { normKey } from '../valid.js';
+import { normKey, parseNum } from '../valid.js';
 import { isoToday, currentKm } from '../logic.js';
 import { serviceSheet, taskSheet } from '../forms.js';
 import { go, refresh } from '../router.js';
@@ -120,14 +120,14 @@ function completar(view) {
   const nd = D.tasks.filter(t => !t.ultFecha && (t.ultKm === '' || t.ultKm == null)).sort((a, b) => a.zona.localeCompare(b.zona) || a.nombre.localeCompare(b.nombre));
   const v = vehicle(), ref = v.fechaCompra || v.fechaMat, refTxt = v.fechaCompra ? 'la fecha de compra' : 'la de matriculación';
   if (!nd.length) { view.innerHTML = `<div class="empty"><h3>Plan completo</h3><p>Todas las tareas tienen su última vez. Ya puedo avisarte.</p><a class="btn" href="#/mant">Ver el plan</a></div>`; return; }
-  view.innerHTML = `<div class="vh"><div><a class="back" href="#/mant">${icon('left')}Mantenimiento</a><h1>¿Cuándo se hizo por última vez?</h1>
+  view.innerHTML = `<div class="vh"><div><a class="back" href="#/mant">${icon('left')}${isSimple() ? 'Revisiones' : 'Mantenimiento'}</a><h1>¿Cuándo se hizo por última vez?</h1>
     <p>${nd.length} tareas. Rellena las que sepas y quita las que no apliquen a tu autocaravana.</p></div></div>
     <p class="fm" style="margin-bottom:14px">Si no sabes cuándo se hizo algo en una autocaravana de 1999, lo prudente es darlo por pendiente: pon ${v.fechaCompra ? 'la fecha de compra' : 'la fecha en que la compraste (puedes indicarla en Ajustes → Vehículo)'} y te avisará ya. Con la correa de distribución no te arriesgues: si no hay factura que lo demuestre, cámbiala.</p>
     <div class="list" id="cl">${nd.map(t => `<div class="row" data-id="${t.id}" style="flex-wrap:wrap">
       <span class="m" style="flex:1 1 200px"><b>${esc(t.nombre)}</b><small>${esc(t.zona)} · ${esc(intervalTxt(t))}</small></span>
       <span style="display:flex;gap:8px;flex:1 1 260px;align-items:center">
         <input type="date" data-f max="${isoToday()}" ${v.fechaMat ? `min="${v.fechaMat}"` : ''} aria-label="Fecha" style="flex:1;min-width:0;padding:9px 10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);font-size:16px">
-        ${+t.intKm ? `<input type="number" inputmode="numeric" step="1" min="0" data-k placeholder="km" aria-label="Kilómetros" style="width:100px;padding:9px 10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);font-size:16px">` : ''}
+        ${+t.intKm ? `<input type="text" inputmode="numeric" autocomplete="off" data-k placeholder="km" aria-label="Kilómetros" style="width:100px;padding:9px 10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);font-size:16px">` : ''}
         <button class="ib" data-del aria-label="Quitar del plan" title="No aplica: quitar del plan">${icon('trash')}</button></span></div>`).join('')}</div>
     <div class="brow" style="margin-top:14px">${ref ? `<button class="btn g" id="all">Poner ${refTxt} (${fDate(ref)}) en las vacías</button>` : ''}<button class="btn" id="sv">${icon('check')}Guardar</button></div><div class="pb"></div>`;
 
@@ -148,16 +148,20 @@ function completar(view) {
     for (const r of view.querySelectorAll('[data-id]')) {
       const t = D.tasks.find(x => x.id === r.dataset.id); if (!t) continue;
       const fi = r.querySelector('[data-f]'), ki = r.querySelector('[data-k]');
-      const f = fi.value, kraw = ki ? ki.value.trim() : '', k = kraw === '' ? '' : +kraw;
+      // Km escritos a la española («145.000») igual que en el resto de formularios
+      const f = fi.value, k = ki ? parseNum(ki.value, true) : '';
       let msg = '';
-      if ((fi.validity && fi.validity.badInput) || (ki && ki.validity && ki.validity.badInput)) msg = 'Dato no válido';
+      if (fi.validity && fi.validity.badInput) msg = 'Fecha no válida';
+      else if (Number.isNaN(k)) msg = 'Los km deben ser un número entero, p. ej. 145.000';
       else if (!f && k === '') { rowErr(r, ''); continue; }
       else if (f && f > today) msg = 'La fecha no puede ser futura';
       else if (f && v.fechaMat && f < v.fechaMat) msg = 'Es anterior a la matriculación (' + fDate(v.fechaMat) + ')';
       else if (k !== '' && (!Number.isInteger(k) || k < 0)) msg = 'Los km deben ser un número entero';
       else if (k !== '' && cur && k > cur) msg = 'No puede superar los km actuales (' + fKm(cur) + ')';
-      else if (+t.intMeses && !f) msg = 'Va por tiempo: falta la fecha';
-      else if (+t.intKm && k === '') msg = 'Va por km: faltan los km';
+      else if (k !== '' && k > 2000000) msg = 'Revisa los km';
+      // Con los dos intervalos basta uno de los datos; con uno solo, hace falta ese
+      else if (+t.intMeses && !+t.intKm && !f) msg = 'Va por tiempo: falta la fecha';
+      else if (+t.intKm && !+t.intMeses && k === '') msg = 'Va por km: faltan los km';
       rowErr(r, msg);
       if (msg) { bad = bad || r; continue; }
       todo.push({ ...t, ultFecha: f, ultKm: k, manFecha: f, manKm: k });

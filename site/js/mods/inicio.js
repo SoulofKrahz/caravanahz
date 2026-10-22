@@ -5,7 +5,7 @@ import { PERFIL } from '../perfil.js';
 import { consumption, kmBetween, isoToday, daysBetween, tripDone } from '../logic.js';
 import { odoSheet, expenseSheet, serviceSheet, docSheet, vehicleSheet } from '../forms.js';
 import { taskDetail, pickTask } from './mant.js';
-import { tripKmSheet } from './viajes.js';
+import { tripKmSheet, nightsOf } from './viajes.js';
 import { docName } from './gastos.js';
 import { bannerDue, bannerText, canPrompt, install, snooze } from '../install.js';
 import { go } from '../router.js';
@@ -148,7 +148,7 @@ export function render(view) {
 }
 
 function tripRow(t, tag) {
-  const n = (t.paradas || []).filter(p => p.noche).length, today = isoToday();
+  const n = nightsOf(t), today = isoToday();
   const d = t.inicio ? (t.inicio > today ? rel(t.inicio) : fDate(t.inicio)) : 'Sin fecha';
   return `<a class="row" href="#/viaje/${t.id}"><span class="ico">${icon('map')}</span><span class="m"><b>${esc(t.nombre)}</b><small>${tag} · ${esc(d)}${+t.kmRuta ? ' · ' + fKm(t.kmRuta) : ''}${n ? ' · ' + n + (n === 1 ? ' noche' : ' noches') : ''}</small></span>${icon('right')}</a>`;
 }

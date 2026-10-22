@@ -29,7 +29,7 @@ export function render(view, params) {
   const a2 = view.querySelector('#add2'); if (a2) a2.onclick = () => tripMeta();
   if (params[0] === 'nuevo') { history.replaceState(null, '', '#/viajes'); tripMeta(); }
 }
-const nightsOf = t => { if (t.inicio && t.fin && t.fin > t.inicio) return daysBetween(t.inicio, t.fin); return (t.paradas || []).filter(p => NIGHT.has(p.tipo)).length; };
+export const nightsOf = t => { if (t.inicio && t.fin && t.fin > t.inicio) return daysBetween(t.inicio, t.fin); return (t.paradas || []).filter(p => NIGHT.has(p.tipo)).length; };
 
 /* ---------- Datos generales del viaje ---------- */
 const metaF = t => [
@@ -69,10 +69,15 @@ function tripMeta(t = {}) {
       if (d) d.onclick = async () => {
         const g = D.expenses.filter(e => e.viajeId === t.id).length;
         if (!(await ask({ title: `¿Borrar el viaje «${t.nombre}»?`, text: g ? `Sus ${g} gastos se conservan, sin viaje asignado.` : '', ok: 'Sí, borrar', cancel: 'No', danger: true }))) return;
-        const old = { ...t };
+        const old = { ...t }, linked = D.expenses.filter(e => e.viajeId === t.id).map(e => e.id);
         for (const e of D.expenses.filter(e => e.viajeId === t.id)) await put('expenses', { ...e, viajeId: '' });
         await del('trips', t.id); await s.close();
-        go('viajes'); undo('Viaje eliminado', async () => { await put('trips', old); go('viaje/' + old.id); });
+        go('viajes'); undo('Viaje eliminado', async () => {
+          await put('trips', old);
+          // Deshacer también devuelve sus gastos al viaje
+          for (const e of D.expenses.filter(e => linked.includes(e.id))) await put('expenses', { ...e, viajeId: old.id });
+          go('viaje/' + old.id);
+        });
       };
       const dp = s.el.querySelector('[data-dup]');
       if (dp) dp.onclick = async () => {
@@ -111,6 +116,8 @@ export function tripKmSheet(t, which, done) {
       });
       const d = s.el.querySelector('[data-del]');
       if (d) d.onclick = async () => {
+        const both = ini && t.kmFin;
+        if (!(await ask({ title: both ? '¿Borrar los km de salida y de vuelta?' : '¿Borrar estos km?', text: both ? 'Sin los km de salida, los de vuelta no sirven y se borran también.' : '', ok: 'Sí, borrar', cancel: 'No', danger: true }))) return;
         if (ini) { delete t.kmIni; delete t.kmFin; } else delete t.kmFin;
         await put('trips', t); await s.close(); toast('Km borrados'); done();
       };
@@ -145,9 +152,7 @@ async function routeOf(stops, factor) {
   };
   if (!navigator.onLine) return straight();
   try {
-    const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 12000);
-    const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${pts.map(p => p[1] + ',' + p[0]).join(';')}?overview=full&geometries=geojson&steps=false`, { signal: ctl.signal });
-    clearTimeout(to);
+    const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${pts.map(p => p[1] + ',' + p[0]).join(';')}?overview=full&geometries=geojson&steps=false`, { signal: timeout(12000) });
     const j = await r.json();
     if (j.code !== 'Ok' || !j.routes || !j.routes.length) throw new Error(j.code || 'sin ruta');
     const rt = j.routes[0];
@@ -158,21 +163,27 @@ async function routeOf(stops, factor) {
 }
 
 /* ---------- Búsqueda de direcciones (Nominatim, OpenStreetMap) ---------- */
+// Con cobertura mala nada se queda esperando para siempre: cada petición tiene un tiempo máximo
+function timeout(ms, parent) {
+  const c = new AbortController(), t = setTimeout(() => c.abort(), ms);
+  if (parent) parent.addEventListener('abort', () => { clearTimeout(t); c.abort(); });
+  return c.signal;
+}
 async function geocode(q, signal) {
-  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=es&q=${encodeURIComponent(q)}`, { signal });
+  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=es&q=${encodeURIComponent(q)}`, { signal: timeout(10000, signal) });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return (await r.json()).map(x => ({ lat: +x.lat, lon: +x.lon, label: x.display_name.split(',').slice(0, 2).join(',').trim(), full: x.display_name }));
 }
 async function reverse(lat, lon) {
   try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&accept-language=es&lat=${lat}&lon=${lon}`);
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&accept-language=es&lat=${lat}&lon=${lon}`, { signal: timeout(10000) });
     const j = await r.json(); const a = j.address || {};
     return a.village || a.town || a.city || a.hamlet || a.municipality || (j.display_name || '').split(',')[0] || null;
   } catch (e) { return null; }
 }
 
 /* ---------- Editor de viaje ---------- */
-export async function renderTrip(view, [id]) {
+export function renderTrip(view, [id]) {
   const t = D.trips.find(x => x.id === id);
   if (!t) { view.innerHTML = `<div class="empty"><h3>Viaje no encontrado</h3><a class="btn" href="#/viajes">Volver a viajes</a></div>`; return; }
   t.paradas = t.paradas || [];
@@ -201,7 +212,7 @@ export async function renderTrip(view, [id]) {
       </div>
     </div><div class="pb"></div>`;
 
-  const save = () => { clearTimeout(saveT); saveT = setTimeout(() => { if (D.trips.includes(t)) put('trips', t); }, 300); };
+  const save = () => { clearTimeout(saveT); saveT = setTimeout(() => { if (D.trips.includes(t)) put('trips', t).catch(e => toast('No se ha podido guardar el viaje: ' + (e.message || e))); }, 300); };
   const meta = () => {
     const n = nightsOf(t), real = t.kmIni && t.kmFin ? t.kmFin - t.kmIni : null;
     $('#tm').textContent = [t.inicio ? fDate(t.inicio) + (t.fin ? ' → ' + fDate(t.fin) : '') : 'Sin fechas', n ? n + (n === 1 ? ' noche' : ' noches') : '', real ? fKm(real) + ' reales' : ''].filter(Boolean).join(' · ');
@@ -257,7 +268,7 @@ export async function renderTrip(view, [id]) {
     const g = geomCache.get(t.paradas.map(p => p.lat + ',' + p.lon).join(';'));
     if (g && g.geom) line = L.polyline(g.geom, { color: col, weight: 4, opacity: .9 }).addTo(map);
     else if (t.paradas.length > 1) line = L.polyline(t.paradas.map(p => [p.lat, p.lon]), { color: col, weight: 3, dashArray: '3 8' }).addTo(map);
-    $('#mh').textContent = t.paradas.length ? 'Toca el mapa para añadir una parada. Arrastra los marcadores para moverlas.' : 'Toca el mapa para marcar la salida.';
+    $('#mh').textContent = (navigator.onLine ? '' : 'Sin conexión: el mapa puede verse en gris. ') + (t.paradas.length ? 'Toca el mapa para añadir una parada. Arrastra los marcadores para moverlas.' : 'Toca el mapa para marcar la salida.');
   }
 
   async function recalc() {
@@ -308,13 +319,18 @@ export async function renderTrip(view, [id]) {
     const v = q.value.trim(); if (v.length < 3) { sg.hidden = true; return; }
     qt = setTimeout(async () => {
       if (!navigator.onLine) { sg.innerHTML = '<button disabled>Sin conexión: toca el mapa</button>'; sg.hidden = false; return; }
-      qa = new AbortController();
+      const my = qa = new AbortController();
+      sg.innerHTML = '<button disabled>Buscando…</button>'; sg.hidden = false;
       try {
-        const res = await geocode(v, qa.signal);
+        const res = await geocode(v, my.signal);
+        if (my !== qa || my.signal.aborted) return;
         sg.innerHTML = res.length ? res.map((r, i) => `<button data-r="${i}">${esc(r.label)}<small>${esc(r.full)}</small></button>`).join('') : '<button disabled>Sin resultados. Prueba con el nombre del pueblo.</button>';
         sg.hidden = false;
         sg.querySelectorAll('[data-r]').forEach(b => (b.onclick = () => { const r = res[+b.dataset.r]; addStop(r.lat, r.lon, r.label); q.value = ''; sg.hidden = true; if (map) map.setView([r.lat, r.lon], Math.max(map.getZoom(), 9)); }));
-      } catch (e) { if (e.name !== 'AbortError') { sg.innerHTML = '<button disabled>No se pudo buscar ahora</button>'; sg.hidden = false; } }
+      } catch (e) {
+        if (my !== qa || my.signal.aborted && q.value.trim() !== v) return; // la ha sustituido otra búsqueda
+        sg.innerHTML = `<button disabled>${e.name === 'AbortError' ? 'La conexión va muy lenta. Prueba otra vez o toca el mapa.' : 'No se pudo buscar ahora. Toca el mapa para marcar el sitio.'}</button>`; sg.hidden = false;
+      }
     }, 700);
   });
   const outside = e => { if (!e.target.closest('.srch')) sg.hidden = true; };
@@ -369,8 +385,8 @@ export async function renderTrip(view, [id]) {
   };
   meta(); stopsList(); totals(); gl(); kmr();
 
-  // Mapa
-  try {
+  // Mapa: se carga aparte. La vista ya está lista y si sales antes de que llegue, no se pinta en otra pantalla.
+  (async () => { try {
     await loadLeaflet();
     if (!alive) return;
     map = L.map('map', { zoomControl: true, attributionControl: true }).setView([40.2, -3.6], 5);
@@ -385,8 +401,8 @@ export async function renderTrip(view, [id]) {
     if (t.paradas.length > 1) recalc();
     setTimeout(() => map && map.invalidateSize(), 200);
   } catch (e) {
-    $('#mh').textContent = 'No se ha podido cargar el mapa (¿sin conexión?). Puedes seguir editando la lista.';
-  }
+    if (alive && $('#mh')) $('#mh').textContent = 'No se ha podido cargar el mapa (¿sin conexión?). Puedes seguir editando la lista y las paradas guardadas.';
+  } })();
 
-  return () => { alive = false; clearTimeout(saveT); if (D.trips.includes(t)) put('trips', t); document.removeEventListener('click', outside); if (map) { map.remove(); map = null; } };
+  return () => { alive = false; clearTimeout(saveT); if (D.trips.includes(t)) put('trips', t).catch(() => {}); document.removeEventListener('click', outside); if (map) { map.remove(); map = null; } };
 }

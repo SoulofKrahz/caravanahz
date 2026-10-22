@@ -535,3 +535,6 @@ a.kpi:hover{border-color:var(--em2)}
 }
 .fld.bad input:focus,.fld.bad select:focus,.fld.bad textarea:focus{outline-color:var(--bad)}
 html.simple .swr small{font-size:calc(13.5px*var(--fs,1))}
+/* Con letra grande, las opciones pasan a otra línea en vez de quedar escondidas fuera de la pantalla */
+.seg:not(.sc){flex-wrap:wrap;overflow:visible}
+.seg:not(.sc) button{flex:1 1 auto}

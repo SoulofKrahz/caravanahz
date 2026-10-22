@@ -24,9 +24,11 @@ export const normKey = s => normText(s).toLowerCase().normalize('NFD').replace(/
  * Número escrito a la española: «1,459» o «1.459» (decimal) y «145.000» o «145 000» en enteros (miles).
  * Devuelve '' si está vacío y NaN si no es un número.
  */
-export function parseNum(raw, int) {
+export function parseNum(raw, int, thou) {
   let s = String(raw ?? '').trim().replace(/\s/g, '').replace(/€|km|l$/gi, '');
   if (s === '') return '';
+  // Importes: «1.234» o «1.234,50» son miles (nadie paga 1,234 €); «12.5» sigue siendo 12,50
+  if (thou && /^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '');
   if (int) { if (/,/.test(s)) return NaN; s = s.replace(/\.(?=\d{3}(\D|$))/g, ''); return /^\d+$/.test(s) ? +s : NaN; }
   if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
   return /^-?\d+(\.\d+)?$/.test(s) ? +s : NaN;
@@ -39,7 +41,7 @@ function fieldValue(el, f) {
   if (f.t === 'switch') return [i.checked, null];
   if (f.t === 'number') {
     if (i.validity && i.validity.badInput) return ['', 'Escribe solo un número'];
-    const n = parseNum(i.value, f.int);
+    const n = parseNum(i.value, f.int, f.thou);
     return Number.isNaN(n) ? ['', f.int ? 'Escribe solo números enteros (sin coma)' : 'Escribe un número, p. ej. 1,459'] : [n, null];
   }
   if (f.t === 'date') {
@@ -151,7 +153,7 @@ export function onSubmit(sheetCtl, fields, extra, save, btnSel = '[data-save]') 
   el.addEventListener('keydown', e => {
     if (e.key !== 'Enter' || !e.target.matches('input:not([type=checkbox])')) return;
     e.preventDefault();
-    const all = [...el.querySelectorAll('.sh-b input:not([type=checkbox]):not([type=hidden]), .sh-b select, .sh-b textarea')].filter(i => !i.closest('[hidden]') && !i.disabled);
+    const all = [...el.querySelectorAll('.sh-b input:not([type=checkbox]):not([type=hidden]), .sh-b select, .sh-b textarea')].filter(i => !i.closest('[hidden]') && !i.closest('details:not([open])') && !i.disabled);
     const next = all[all.indexOf(e.target) + 1];
     if (next && next.tagName !== 'TEXTAREA') { next.focus(); if (next.select && next.type !== 'date') next.select(); } else run();
   });
@@ -167,7 +169,7 @@ export function onSubmit(sheetCtl, fields, extra, save, btnSel = '[data-save]') 
 export const KM_MAX = 2000000;
 export const R = {
   km: { int: true, min: 0, max: KM_MAX },
-  money: (max = 50000) => ({ min: 0.01, max, dec: 2 }),
+  money: (max = 50000) => ({ min: 0.01, max, dec: 2, thou: true }),
   dateRange: { minDate: '1950-01-01', maxDate: () => addMonths(isoToday(), 12 * 25) },
 };
 

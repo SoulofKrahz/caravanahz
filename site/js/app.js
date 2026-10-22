@@ -1,5 +1,5 @@
 import { loadAll, getKV } from './db.js';
-import { $, icon, esc } from './ui.js';
+import { $, icon, esc, toast } from './ui.js';
 import { route, refresh, onRender, NAV, setGuard } from './router.js';
 import { prefs, alertCount, VER } from './store.js';
 import { applyLook, savePrefs } from './theme.js';
@@ -50,7 +50,15 @@ $('#th').onclick = () => savePrefs({ theme: document.documentElement.dataset.the
 /* Si cambia la posibilidad de instalar, se repinta Inicio o Ajustes para mostrar u ocultar la opción */
 onInstallChange(() => { const h = location.hash; if (/^#\/(inicio|ajustes\/avanzado)?$/.test(h) || h === '') refresh(); });
 
-/* Aviso de versión nueva (como Noticiahz): compara VER con version.txt, que genera la publicación */
+/* Actualizaciones (pensadas para viajar)
+   - version.txt dice si hay una versión publicada más nueva → se descarga en segundo plano (service worker).
+   - Cuando ya está descargada entera, se avisa. Nunca se recarga con una hoja o una pregunta abierta:
+     si sales de la app sin nada a medias, se aplica sola; si no, al pulsar «Actualizar ahora». */
+const busy = () => !!document.querySelector('.sheet, .ask');
+const swOK = 'serviceWorker' in navigator && window.isSecureContext;
+let newReady = false;
+const showNew = txt => { $('#vnb').hidden = false; $('#vnb span').textContent = txt; };
+const regUpdate = async () => { try { const r = swOK && (await navigator.serviceWorker.getRegistration()); if (r) await r.update(); return !!r; } catch (e) { return false; } };
 {
   let last = 0;
   const chk = () => {
@@ -58,21 +66,32 @@ onInstallChange(() => { const h = location.hash; if (/^#\/(inicio|ajustes\/avanz
     last = Date.now();
     fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }).then(r => (r.ok ? r.text() : '')).then(v => {
       v = (v || '').trim();
-      if (/^\d{4}-\d\d-\d\d-[\d.]+$/.test(v) && v !== VER) { $('#vnb').hidden = false; $('#vnb span').textContent = `Hay una versión nueva de la app (${v}).`; }
+      if (/^\d{4}-\d\d-\d\d-[\d.]+$/.test(v) && v !== VER) { if (!newReady) showNew(`Hay una versión nueva de la app (${v}).`); regUpdate(); }
     }).catch(() => {});
   };
   setTimeout(chk, 2500); document.addEventListener('visibilitychange', chk); setInterval(chk, 18e5);
   $('#vng').onclick = async () => {
-    const b = $('#vng'); b.disabled = true; b.textContent = 'Actualizando…';
-    try { const reg = navigator.serviceWorker && (await navigator.serviceWorker.getRegistration()); if (reg) await reg.update(); } catch (e) {}
-    location.reload();
+    const b = $('#vng');
+    if (newReady || !swOK) return location.reload();
+    b.disabled = true; b.textContent = 'Descargando…';
+    await regUpdate();
+    // Se espera a que la versión nueva esté guardada entera (como mucho 20 s)
+    const ok = await new Promise(res => { if (newReady) return res(true); const t = setTimeout(() => res(false), 20000); addEventListener('cz-new-ready', () => { clearTimeout(t); res(true); }, { once: true }); });
+    if (ok) location.reload();
+    else { b.disabled = false; b.textContent = 'Actualizar ahora'; toast('No se ha podido descargar ahora. Se intentará solo cuando haya mejor cobertura'); }
   };
 }
 
 /* PWA */
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
+if (swOK) {
   const had = !!navigator.serviceWorker.controller;
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) location.reload(); });
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!had) return; // primera instalación: no hay nada que actualizar
+    newReady = true; dispatchEvent(new Event('cz-new-ready'));
+    showNew('Hay una versión nueva de la app lista.'); $('#vng').textContent = 'Actualizar ahora'; $('#vng').disabled = false;
+  });
+  // Al salir de la app (cambiar a otra, bloquear el móvil) y sin nada a medias, se aplica sin que se note
+  document.addEventListener('visibilitychange', () => { if (document.hidden && newReady && !busy()) location.reload(); });
   addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
 

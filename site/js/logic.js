@@ -331,7 +331,7 @@ export function nightsIn(trips, from, to, nightTypes) {
  */
 export function maintForecast(tasksWithStatus, services, today, months = 12) {
   const lim = addMonths(today, months);
-  const items = tasksWithStatus.filter(({ s }) => s.state === 'over' || (s.when && s.when <= lim)).map(({ t, s }) => {
+  const items = tasksWithStatus.filter(({ s }) => s.state === 'over' || s.state === 'soon' || (s.when && s.when <= lim)).map(({ t, s }) => {
     const h = services.filter(x => x.tareaId === t.id && +x.coste > 0).sort((a, b) => b.fecha.localeCompare(a.fecha));
     return { t, s, coste: h.length ? +h[0].coste : null };
   });

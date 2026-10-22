@@ -1,5 +1,6 @@
 // Almacenamiento local en IndexedDB. Todos los datos se cargan en memoria al arrancar (son pocos)
-// y cada cambio se escribe a la vez en memoria y en disco.
+// Cada cambio se escribe PRIMERO en disco y solo después en memoria: si el disco falla, la app no enseña
+// como guardado algo que se perdería al cerrarla (el formulario muestra el error y no se cierra).
 
 const NAME = 'caravanahz';
 const VERSION = 1;
@@ -14,17 +15,33 @@ function open() {
       if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
       STORES.forEach(s => { if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: 'id' }); });
     };
-    r.onsuccess = () => res(r.result);
-    r.onerror = () => rej(r.error);
+    r.onsuccess = () => {
+      const db = r.result;
+      // Otra pestaña con una versión nueva necesita la base: cerramos y la próxima operación la reabre
+      db.onversionchange = () => { db.close(); dbp = null; };
+      db.onclose = () => { dbp = null; };
+      res(db);
+    };
+    r.onerror = () => { dbp = null; rej(r.error); };
+    r.onblocked = () => {};
   }));
 }
-function tx(store, mode, fn) {
+function tx1(store, mode, fn) {
   return open().then(db => new Promise((res, rej) => {
     const t = db.transaction(store, mode), s = t.objectStore(store);
     const out = fn(s);
     t.oncomplete = () => res(out && 'result' in out ? out.result : undefined);
-    t.onerror = t.onabort = () => rej(t.error);
+    t.onerror = t.onabort = () => rej(t.error || new Error('Operación cancelada'));
   }));
+}
+// Android puede cerrar la conexión si la app pasa mucho tiempo en segundo plano: se reabre y se reintenta una vez
+async function tx(store, mode, fn) {
+  try { return await tx1(store, mode, fn); }
+  catch (e) {
+    if (e && (e.name === 'InvalidStateError' || /closing|closed/i.test(e.message || ''))) { dbp = null; return tx1(store, mode, fn); }
+    if (e && e.name === 'QuotaExceededError') throw new Error('el móvil no tiene espacio libre');
+    throw e;
+  }
 }
 
 /** Estado en memoria: D.tasks, D.services… (arrays) y D.kv (objeto) */
@@ -45,18 +62,18 @@ export const uid = () => Date.now().toString(36) + Math.random().toString(36).sl
 export async function put(store, obj) {
   if (!obj.id) obj.id = uid();
   obj.upd = Date.now();
+  await tx(store, 'readwrite', st => st.put(obj));
   const arr = D[store], i = arr.findIndex(x => x.id === obj.id);
   if (i >= 0) arr[i] = obj; else arr.push(obj);
-  await tx(store, 'readwrite', st => st.put(obj));
   return obj;
 }
 export async function del(store, id) {
-  D[store] = D[store].filter(x => x.id !== id);
   await tx(store, 'readwrite', st => st.delete(id));
+  D[store] = D[store].filter(x => x.id !== id);
 }
 export async function setKV(key, val) {
-  D.kv[key] = val;
   await tx('kv', 'readwrite', st => st.put(val, key));
+  D.kv[key] = val;
 }
 export const getKV = (key, def) => (D.kv[key] === undefined ? def : D.kv[key]);
 

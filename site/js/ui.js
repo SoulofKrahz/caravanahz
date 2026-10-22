@@ -60,6 +60,7 @@ export function undo(msg, fn) {
 
 /* ---------- Preguntas (sustituye a confirm(): botones grandes y con texto claro) ----------
    ask({ title, text, ok: 'Sí, borrar', cancel: 'No', danger: true }) → Promise<boolean> */
+let curAsk = null; // la pregunta abierta: el botón Atrás del móvil la cancela (como en cualquier app Android)
 export function ask({ title, text = '', ok = 'Sí', cancel = 'Cancelar', danger = false }) {
   return new Promise(res => {
     const ov = document.createElement('div'), dl = document.createElement('div');
@@ -67,9 +68,11 @@ export function ask({ title, text = '', ok = 'Sí', cancel = 'Cancelar', danger 
     dl.innerHTML = `<h2>${esc(title)}</h2>${text ? `<p>${esc(text).replace(/\n/g, '<br>')}</p>` : ''}<div class="ask-b"><button class="btn g" data-no>${esc(cancel)}</button><button class="btn ${danger ? 'dd' : ''}" data-ok>${esc(ok)}</button></div>`;
     document.body.append(ov, dl);
     const prev = document.activeElement;
-    const end = v => { ov.remove(); dl.remove(); removeEventListener('keydown', key, true); prev && prev.focus && prev.focus({ preventScroll: true }); res(v); };
+    if (curAsk) curAsk(false); // nunca dos preguntas a la vez
+    const end = v => { if (curAsk === end) curAsk = null; ov.remove(); dl.remove(); removeEventListener('keydown', key, true); prev && prev.focus && prev.focus({ preventScroll: true }); res(v); };
     const key = e => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); end(false); } };
     addEventListener('keydown', key, true);
+    curAsk = end;
     dl.querySelector('[data-ok]').onclick = () => end(true);
     dl.querySelector('[data-no]').onclick = () => end(false);
     ov.onclick = () => end(false);
@@ -122,7 +125,12 @@ export function sheet({ title, body = '', foot = '', onMount, onClose, wide }) {
   return ctl;
 }
 addEventListener('popstate', () => {
-  const top = stack[stack.length - 1]; if (!top) return;
+  const top = stack[stack.length - 1];
+  // Atrás con una pregunta abierta = «Cancelar». La hoja de debajo (si la hay) sigue abierta.
+  if (curAsk) { curAsk(false); if (top && !top.closing) history.pushState({ sheet: top.id }, ''); return; }
+  if (!top) return;
+  // Guardando: no se cierra a medias; el propio guardado cerrará la hoja
+  if (!top.closing && top.saving) { history.pushState({ sheet: top.id }, ''); return; }
   // Botón Atrás del móvil con datos sin guardar: se pregunta; si cancela, la hoja sigue abierta
   if (!top.closing && top.dirty && !top.saving) {
     // Atrás con algo escrito: la hoja sigue abierta y se pregunta; si decide salir, se cierra de verdad

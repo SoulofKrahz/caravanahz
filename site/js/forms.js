@@ -2,7 +2,7 @@
 // Todas las comprobaciones viven aquí, junto a cada formulario.
 import { D, put, del, uid, setKV } from './db.js';
 import { sheet, form, toast, undo, fKm, fDate, fNum, fPpl, icon, esc, ask, isSimple } from './ui.js';
-import { isoToday, currentKm, kmCheck, addMonths, addDays, lastFuelPrice } from './logic.js';
+import { isoToday, currentKm, kmPoints, kmCheck, addMonths, addDays, lastFuelPrice } from './logic.js';
 import { CATS, ZONAS, DOC_TIPOS, vehicle } from './store.js';
 import { PERFIL, ITV_CAT, itvMeses } from './perfil.js';
 import { refresh } from './router.js';
@@ -117,7 +117,7 @@ export function expenseSheet(e = {}, preset = {}) {
  */
 function fuelCalc(el) {
   const L = el.querySelector('[name=litros]'), P = el.querySelector('[name=ppl]'), I = el.querySelector('[name=importe]');
-  const num = i => { const v = parseNum(i.value); return typeof v === 'number' && v > 0 ? v : null; };
+  const num = i => { const v = parseNum(i.value, false, i === I); return typeof v === 'number' && v > 0 ? v : null; };
   const fill = (i, v, d) => { i.value = v.toFixed(d).replace('.', ','); i.dataset.auto = '1'; i.closest('.fld').classList.add('auto'); };
   const own = i => { delete i.dataset.auto; i.closest('.fld').classList.remove('auto'); };
   [L, P, I].forEach(i => i.addEventListener('input', () => {
@@ -137,7 +137,7 @@ export function serviceSheet(task = null, sv = {}) {
     ...(task ? [] : [{ k: 'nombre', l: 'Qué se ha hecho', full: 1, ph: 'Ej. Cambio de bomba de agua', req: 'Indica qué se ha hecho', minLen: 3, maxLen: 80 }, { k: 'zona', l: 'Zona', t: 'select', o: ZONAS, req: true }]),
     { k: 'fecha', l: 'Fecha', ...pastDate({ req: 'Indica la fecha' }) },
     { k: 'km', l: 'Kilómetros', t: 'number', step: 1, ...R.km, req: task && +task.intKm ? 'Esta tarea va por km: indica los km' : false },
-    { k: 'coste', l: 'Coste (€)', t: 'number', step: 0.01, min: 0, max: 100000, dec: 2, help: 'Opcional' },
+    { k: 'coste', l: 'Coste (€)', t: 'number', step: 0.01, min: 0, max: 100000, dec: 2, thou: true, help: 'Opcional' },
     { k: 'taller', l: 'Taller o «Yo mismo»', ph: 'Ej. Taller Pérez', maxLen: 60, sug: used(D.services, 'taller') },
     ...(isNew ? [{ k: 'crearGasto', adv: 1, l: 'Añadir también a gastos', t: 'switch', help: 'Si indicas coste, se crea el gasto en «Mantenimiento»' }] : []),
     { k: 'notas', adv: 1, l: 'Notas', t: 'textarea', ph: 'Piezas, referencias, aceite usado…', maxLen: 2000 },
@@ -242,7 +242,7 @@ export function docSheet(d = {}) {
     { k: 'nombre', l: 'Compañía o detalle', ph: 'Ej. Mapfre, Estación ITV…', maxLen: 60 },
     { k: 'vence', l: 'Caduca el', t: 'date', req: 'Indica la fecha de caducidad', minDate: '2000-01-01', maxDate: () => addMonths(isoToday(), 12 * 20) },
     { k: 'avisoDias', adv: 1, l: 'Avisar con (días)', t: 'number', step: 1, int: true, min: 0, max: 365, req: 'Indica con cuántos días avisar' },
-    { k: 'importe', l: 'Importe (€)', t: 'number', step: 0.01, min: 0, max: 20000, dec: 2, help: 'Para el aviso de renovación' },
+    { k: 'importe', l: 'Importe (€)', t: 'number', step: 0.01, min: 0, max: 20000, dec: 2, thou: true, help: 'Para el aviso de renovación' },
     { k: 'ref', adv: 1, l: 'Nº de póliza / referencia', ph: 'Opcional', maxLen: 40 },
     { k: 'tel', l: 'Teléfono de asistencia', t: 'tel', ph: 'Opcional', pattern: [/^\+?[0-9 ()-]{6,20}$/, 'Teléfono no válido (solo números, espacios y +)'] },
     { k: 'notas', adv: 1, l: 'Notas', t: 'textarea', maxLen: 2000 },
@@ -273,7 +273,7 @@ function renewSheet(d) {
   const F = [
     { k: 'meses', l: 'Nueva vigencia', t: 'select', o: [['12', '1 año'], ['24', '2 años'], ['6', '6 meses'], ['0', 'Otra fecha']], help: d.tipo === 'ITV' ? (vehicle().catITV ? `Según la categoría de tu ficha técnica: cada ${def === '6' ? '6 meses' : 'año'}` : 'Indica la categoría de la ficha técnica en Ajustes → Vehículo y lo sabré') : '' },
     { k: 'vence', l: 'Nueva fecha de caducidad', t: 'date', req: 'Indica la nueva fecha', minDate: () => addDays(d.vence || isoToday(), 1), maxDate: () => addMonths(isoToday(), 12 * 20) },
-    { k: 'importe', l: 'Importe pagado (€)', t: 'number', step: 0.01, min: 0, max: 20000, dec: 2 },
+    { k: 'importe', l: 'Importe pagado (€)', t: 'number', step: 0.01, min: 0, max: 20000, dec: 2, thou: true },
     { k: 'gasto', l: 'Añadir a gastos', t: 'switch', def: true },
   ];
   sheet({
@@ -318,19 +318,27 @@ export function vehicleSheet(onDone) {
   const v0 = vehicle(), first = !v0.nombre;
   const init = first ? { ...PERFIL.vehiculo, ...v0 } : v0;
   const cur = currentKm(D);
+  // Solo los km de verdad (repostajes, revisiones, lecturas) ponen un mínimo. Los aproximados de esta misma
+  // ficha se pueden corregir a la baja: si al configurar te equivocaste de cifra, no te quedas atrapado.
+  const real = kmPoints(D).filter(x => !x.aprox).reduce((m, x) => Math.max(m, x.km), 0);
   sheet({
     title: first ? 'Tu autocaravana' : 'Editar autocaravana',
     body: (first ? `<p class="hint" style="margin-bottom:12px">He rellenado lo que sé de tu ${esc(PERFIL.nombre)}. Lo obligatorio es el nombre, la marca y los km; el resto puedes completarlo luego en Ajustes.</p>` : '') + form(VEH_F, init),
     foot: actions(first ? 'Continuar' : 'Guardar'),
     onMount: s => onSubmit(s, VEH_F, v => {
       const er = [];
-      if (v.km < cur) er.push({ k: 'km', msg: `Tus registros ya marcan ${fKm(cur)}: no puede ser menos` });
+      if (v.km < real) er.push({ k: 'km', msg: `Tus registros ya marcan ${fKm(real)}: no puede ser menos` });
       if (v.fechaMat && v.km > 0) { const years = Math.max(0.1, (Date.now() - new Date(v.fechaMat)) / 3.156e10); if (v.km / years > 150000) er.push({ k: 'km', msg: `Son más de ${fKm(150000)} al año desde la matriculación: revisa los km` }); }
       return er;
     }, async v => {
+      if (v.km < cur) {
+        const ok = await ask({ title: 'Corregir los kilómetros', text: `Antes pusiste ${fKm(cur)} y ahora ${fKm(v.km)}. Cambio el dato aproximado por el nuevo.`, ok: 'Sí, corregir' });
+        if (!ok) return '';
+        for (const o of D.odo.filter(o => o.aprox && o.km > v.km)) await del('odo', o.id);
+      }
       await setKV('vehicle', { ...v0, ...v });
       // Dato de referencia: no impide apuntar después repostajes o mantenimientos con los km exactos
-      if (v.km > cur) await put('odo', { fecha: isoToday(), km: v.km, aprox: true });
+      if (v.km > currentKm(D) || (v.km < cur && v.km > real)) await put('odo', { fecha: isoToday(), km: v.km, aprox: true });
       toast(first ? 'Autocaravana guardada' : 'Datos guardados');
       await s.close(); onDone ? onDone() : refresh();
     })

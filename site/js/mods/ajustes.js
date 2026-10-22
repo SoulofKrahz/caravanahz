@@ -1,6 +1,6 @@
 // Ajustes por secciones (como en Noticiahz). Cada sección es una función: añadir una nueva es añadir una entrada a SECS.
 import { D, dump, restore, wipe, setKV, getKV, STORES, put, del } from '../db.js';
-import { esc, icon, fKm, fDate, sheet, form, toast, download, ago, undo, ask } from '../ui.js';
+import { esc, icon, fKm, fDate, fNum, sheet, form, toast, download, ago, undo, ask, isSimple } from '../ui.js';
 import { vehicle, prefs, ctx, tasksWithStatus, docsWithStatus, VER, STOP_TIPOS, PREF_DEFAULTS, needsProfilePlan, applyProfilePlan } from '../store.js';
 import { ITV_CAT, PERFIL } from '../perfil.js';
 import { isApp, isIOS, canPrompt, installed, install } from '../install.js';
@@ -41,7 +41,8 @@ export function render(view, [sec]) {
     const k = b.closest('[data-pref]').dataset.pref, raw = b.dataset.v, v = isNaN(+raw) ? raw : +raw;
     await savePrefs({ [k]: v });
     b.parentNode.querySelectorAll('button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); });
-    toast('Guardado');
+    // Tema y letra se ven cambiar al instante: el aviso «Guardado» sobraría (y taparía la pantalla)
+    if (k !== 'theme' && k !== 'fs') toast('Guardado');
   });
   body.addEventListener('change', async e => {
     const k = e.target.dataset.prefSw; if (!k) return;
@@ -57,8 +58,8 @@ function vehiculo(el) {
     ['Nombre', v.nombre], ['Marca y modelo', v.marca], ['Base / motor', v.base], ['Tipo', v.carroceria], ['Matrícula', v.matricula],
     ['ITV', v.catITV ? (ITV_CAT.find(x => x[0] === v.catITV) || [, ''])[1] : 'Categoría sin indicar: mírala en la ficha técnica'],
     ['1ª matriculación', v.fechaMat && fDate(v.fechaMat)], ['Cuentakilómetros', fKm(currentKm(D))],
-    ['Medidas', [v.altura && `alto ${v.altura} m`, v.longitud && `largo ${v.longitud} m`, v.anchura && `ancho ${v.anchura} m`].filter(Boolean).join(' · ')],
-    ['Peso y depósitos', [v.mma && `MMA ${v.mma} kg`, v.deposito && `gasóleo ${v.deposito} L`, v.aguaLimpia && `agua ${v.aguaLimpia} L`].filter(Boolean).join(' · ')],
+    ['Medidas', [v.altura && `alto ${fNum(v.altura, 2)} m`, v.longitud && `largo ${fNum(v.longitud, 2)} m`, v.anchura && `ancho ${fNum(v.anchura, 2)} m`].filter(Boolean).join(' · ')],
+    ['Peso y depósitos', [v.mma && `MMA ${fNum(v.mma, 0)} kg`, v.deposito && `gasóleo ${v.deposito} L`, v.aguaLimpia && `agua ${v.aguaLimpia} L`].filter(Boolean).join(' · ')],
   ];
   el.innerHTML = set('Tu autocaravana', 'Las medidas se usan en los avisos de ruta y el depósito en la comprobación de repostajes.',
     `<div class="gc">${rows.map(([a, b]) => `<div class="row"><div><small>${a}</small><b>${esc(b || '—')}</b></div></div>`).join('')}</div>
@@ -79,15 +80,15 @@ function vehiculo(el) {
 
 /* ---------- Apariencia ---------- */
 function apariencia(el) {
-  const p = prefs(), sel = presetIndex(p);
+  const p = prefs(), sel = presetIndex(p), simple = isSimple();
   el.innerHTML = set('Modo sencillo', 'Letra y botones más grandes, textos más claros y solo lo esencial a la vista. Recomendado si la app la usa alguien con poca costumbre o con gafas.', `<div class="gc">${sw('simple', 'Modo sencillo', p.simple !== false ? 'Activado' : 'Desactivado: se ve todo, más compacto', p.simple !== false)}</div>`)
     + set('Tema', 'Automático sigue el modo claro u oscuro del móvil.', seg('theme', [['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']], p.theme))
     + set('Color', 'Se aplica a botones, avisos, logotipo e icono. El contraste se ajusta solo para que el texto siempre se lea.',
       `<div class="sws" id="sws" role="radiogroup" aria-label="Color de la app">${PRESETS.map(([n, h, s], i) => `<button class="swc ${i === sel ? 'on' : ''}" data-i="${i}" style="background:${swatchHex(h, s)}" role="radio" aria-checked="${i === sel}" aria-label="${n}" title="${n}"></button>`).join('')}</div>
        <div class="row" style="border:0;padding:14px 0 0"><div class="m"><b id="swn">${sel >= 0 ? PRESETS[sel][0] : 'Personalizado'}</b><small style="white-space:normal">O elige cualquier color con el selector.</small></div>
        <input type="color" id="acc" value="${sel === 0 ? '#059669' : swatchHex(p.ah, p.as)}" aria-label="Color personalizado" class="cpick"></div>`)
-    + set('Tamaño del texto', '', seg('fs', FONT_SIZES, p.fs) + `<p class="hint" style="margin:10px 2px 0">Vista previa: <span style="font:600 calc(20px*var(--fs,1))/1.2 Newsreader,serif;color:var(--tx)">Cambio de aceite en 1.200 km</span></p>`)
-    + set('Pantalla al abrir', 'La primera que ves al entrar en la app.', seg('start', [['inicio', 'Inicio'], ['mant', 'Mantenimiento'], ['viajes', 'Viajes'], ['gastos', 'Gastos'], ['stats', 'Estadísticas']], p.start))
+    + set('Tamaño del texto', 'Se aplica al momento en toda la app. Elige el que leas sin esfuerzo.', seg('fs', FONT_SIZES, p.fs))
+    + set('Pantalla al abrir', 'La primera que ves al entrar en la app.', seg('start', [['inicio', 'Inicio'], ['mant', simple ? 'Revisiones' : 'Mantenimiento'], ['viajes', 'Viajes'], ['gastos', 'Gastos'], ['stats', simple ? 'Resumen' : 'Estadísticas']], p.start))
     + set('Movimiento', '', `<div class="gc">${sw('reduceMotion', 'Reducir animaciones', 'Sin transiciones ni desplazamientos suaves', p.reduceMotion)}</div>`);
   const name = () => { const i = presetIndex(); el.querySelector('#swn').textContent = i >= 0 ? PRESETS[i][0] : 'Personalizado'; el.querySelectorAll('.swc').forEach((b, k) => { b.classList.toggle('on', k === i); b.setAttribute('aria-checked', k === i); }); };
   el.querySelector('#sws').onclick = async e => {
@@ -244,6 +245,8 @@ function clean(j) {
   out.trips.forEach(t => (t.paradas = (Array.isArray(t.paradas) ? t.paradas : []).filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lon))));
   out.tasks = out.tasks.filter(t => isS(t.nombre, 200));
   out.expenses = out.expenses.filter(e => isS(e.fecha, 10) && Number.isFinite(+e.importe));
+  out.services = out.services.filter(x => isS(x.fecha, 10) && isS(x.nombre, 200));
+  out.odo = out.odo.filter(x => isS(x.fecha, 10) && Number.isFinite(+x.km));
   out.docs = out.docs.filter(x => isS(x.tipo, 60));
   return { out, date: new Date(j.exported) };
 }
@@ -262,7 +265,7 @@ function exportICS() {
   const c = ctx(), ev = [];
   tasksWithStatus(c).forEach(({ t, s }) => {
     if (!s.when) return;
-    ev.push({ uid: 't-' + t.id, date: s.when < c.today ? c.today : s.when, title: `🔧 ${t.nombre}`, desc: `Mantenimiento de la autocaravana.${s.dueKm ? ` También vence a los ${s.dueKm} km.` : ''}${s.projDate && s.projDate === s.when ? ' Fecha estimada por tu ritmo de uso.' : ''}`, alarmDays: 7 });
+    ev.push({ uid: 't-' + t.id, date: s.when < c.today ? c.today : s.when, title: `🔧 ${t.nombre}`, desc: `Mantenimiento de la autocaravana.${s.dueKm ? ` También vence a los ${fKm(s.dueKm)}.` : ''}${s.projDate && s.projDate === s.when ? ' Fecha estimada por tu ritmo de uso.' : ''}`, alarmDays: 7 });
   });
   docsWithStatus(c).forEach(({ d }) => { if (d.vence) ev.push({ uid: 'd-' + d.id, date: d.vence, title: `📄 Caduca: ${d.tipo}${d.nombre ? ' (' + d.nombre + ')' : ''}`, desc: d.ref ? 'Ref.: ' + d.ref : 'Documento de la autocaravana', alarmDays: Math.max(1, +d.avisoDias || 30) }); });
   if (!ev.length) return toast('No hay vencimientos con fecha para exportar');

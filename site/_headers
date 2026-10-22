@@ -4,3 +4,7 @@
   Permissions-Policy: geolocation=(self), camera=(), microphone=()
 /sw.js
   Cache-Control: no-cache
+/version.txt
+  Cache-Control: no-store
+/
+  Cache-Control: no-cache
