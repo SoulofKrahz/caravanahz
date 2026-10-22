@@ -109,7 +109,7 @@ export function render(view) {
     <div class="sec"><h2>¿Qué quieres apuntar?</h2>
       <div class="bigact">
         <button id="qf"><span class="ico">${icon('fuel')}</span><b>Repostaje</b><small>He echado gasóleo</small></button>
-        <button id="qg"><span class="ico">${icon('euro')}</span><b>Otro gasto</b><small>Área, peaje, camping…</small></button>
+        <button id="qg"><span class="ico">${icon('euro')}</span><b>Otro gasto</b><small>Área, peaje, equipamiento…</small></button>
         <button id="qm"><span class="ico">${icon('wrench')}</span><b>Revisión hecha</b><small>Aceite, filtros, gas…</small></button>
         <button id="qv"><span class="ico">${icon('map')}</span><b>Nuevo viaje</b><small>Ruta y paradas</small></button>
       </div>${asisHtml}

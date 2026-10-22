@@ -4,11 +4,14 @@ import { normKey } from './valid.js';
 import { currentKm, kmRate, taskStatus, docStatus, isoToday, RANK } from './logic.js';
 
 export const APP = 'Caravanahz';
-export const VER = '2026-10-22-5';
+export const VER = '2026-10-22-6';
 
 export const ZONAS = ['Motor', 'Chasis y frenos', 'Neumáticos', 'Célula', 'Gas', 'Agua', 'Electricidad', 'Seguridad', 'Otros'];
 export const ZONA_ICO = { Motor: 'gauge', 'Chasis y frenos': 'wrench', Neumáticos: 'gps', Célula: 'van', Gas: 'fuel', Agua: 'fuel', Electricidad: 'gauge', Seguridad: 'alert', Otros: 'wrench' };
 export const CATS = ['Combustible', 'Peajes', 'Área / camping', 'Mantenimiento', 'Seguro', 'Impuestos y tasas', 'Equipamiento', 'Ferry', 'Otros'];
+/** Icono y ejemplo de cada categoría (el ejemplo sale como pista en el concepto) */
+export const CAT_ICO = { Combustible: 'fuel', Peajes: 'map', 'Área / camping': 'moon-bed', Mantenimiento: 'wrench', Seguro: 'doc', 'Impuestos y tasas': 'doc', Equipamiento: 'van', Ferry: 'map', Otros: 'euro' };
+export const CAT_EJ = { Combustible: 'Gasolinera, p. ej. Repsol Lleida', Peajes: 'Ej. peaje AP-7', 'Área / camping': 'Ej. área de Cangas, camping Picos', Mantenimiento: 'Ej. cambio de aceite en Talleres Pepe', Seguro: 'Ej. Mapfre, póliza anual', 'Impuestos y tasas': 'Ej. impuesto de circulación, ITV', Equipamiento: 'Ej. toldo, placa solar, batería, sillas', Ferry: 'Ej. Barcelona–Palma', Otros: 'Ej. lavado, parking, multa' };
 export const DOC_TIPOS = ['ITV', 'Seguro', 'Impuesto de circulación', 'Revisión de gas', 'Garantía', 'Carnet de conducir', 'Asistencia en carretera', 'Otro'];
 export const STOP_TIPOS = [['visita', 'Visita'], ['area', 'Área AC (pernocta)'], ['camping', 'Camping (pernocta)'], ['libre', 'Pernocta libre'], ['repostaje', 'Repostaje / servicio']];
 export const NIGHT = new Set(['area', 'camping', 'libre']);

@@ -153,8 +153,18 @@ async function run(browser, label, viewport, mobile) {
   // 9b) Importes con punto de miles
   await p.goto(BASE + '#/gastos/gastos'); await p.waitForTimeout(300);
   await p.click('#add'); await p.waitForTimeout(300);
-  await p.selectOption('.sheet [name=cat]', 'Mantenimiento'); await p.fill('.sheet [name=importe]', '1.234'); await save();
+  await p.click('.sheet .catp [data-c="Mantenimiento"]'); await p.fill('.sheet [name=importe]', '1.234'); await save();
   ok((await Dm()).expenses.some(e => e.importe === 1234), 'importe «1.234» se guarda como 1.234 €');
+  // 9b2) Todas las categorías a la vista: un gasto de Equipamiento desde «Otro gasto» y aparece en Estadísticas
+  await p.goto(BASE + '#/inicio'); await p.waitForTimeout(300);
+  await p.click(mobile ? '#qg' : '#qg'); await p.waitForTimeout(300);
+  ok(await p.locator('.sheet .catp [data-c]').count() === 9 && await p.locator('.sheet .catp [data-c="Equipamiento"]').isVisible() && await p.locator('.sheet .catp [data-c="Otros"]').isVisible(), 'las 9 categorías se ven como botones (Equipamiento y Otros incluidos)');
+  await p.click('.sheet .catp [data-c="Equipamiento"]'); await p.waitForTimeout(100);
+  ok((await p.getAttribute('.sheet [name=concepto]', 'placeholder')).includes('toldo') && await p.locator('.sheet .catp .on').count() === 1, 'al elegir Equipamiento se marca y el concepto da ejemplos');
+  await p.fill('.sheet [name=importe]', '320'); await p.fill('.sheet [name=concepto]', 'Toldo nuevo'); await save();
+  ok((await Dm()).expenses.some(e => e.cat === 'Equipamiento' && e.importe === 320), 'gasto de Equipamiento guardado');
+  await p.goto(BASE + '#/stats'); await p.waitForTimeout(400);
+  ok((await p.innerText('#view')).replace(/\u00a0/g, ' ').match(/Equipamiento y otros[\s\S]{0,80}320 €/), 'Estadísticas: «Equipamiento y otros» suma el gasto');
   // 9c) Botón Atrás con una pregunta abierta: la cancela y la hoja sigue
   await p.goto(BASE + '#/inicio'); await p.waitForTimeout(300);
   await p.click('#km'); await p.waitForTimeout(300); await p.fill('.sheet [name=km]', '147000');

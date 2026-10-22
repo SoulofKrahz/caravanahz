@@ -1,6 +1,6 @@
 import { D } from '../db.js';
 import { esc, icon, fKm, fDate, fEur, fEur0, fNum, fPpl, fMonth, rel, stChip, download, toast } from '../ui.js';
-import { ctx, docsWithStatus, CATS, vehicle } from '../store.js';
+import { ctx, docsWithStatus, CATS, CAT_ICO, vehicle } from '../store.js';
 import { buildCSV, isoToday } from '../logic.js';
 import { expenseSheet, docSheet } from '../forms.js';
 import { kmInYear } from './inicio.js';
@@ -8,7 +8,6 @@ import { renderFuel } from './combustible.js';
 import { normKey } from '../valid.js';
 
 let tab = 'gastos', year = String(new Date().getFullYear()), cat = '';
-const CAT_ICO = { Combustible: 'fuel', Peajes: 'map', 'Área / camping': 'moon-bed', Mantenimiento: 'wrench', Seguro: 'doc', 'Impuestos y tasas': 'doc', Equipamiento: 'van', Ferry: 'map', Otros: 'euro' };
 
 export function render(view, params = []) {
   if (params[0] && ['gastos', 'combustible', 'docs'].includes(params[0])) tab = params[0];

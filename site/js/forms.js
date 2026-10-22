@@ -3,7 +3,7 @@
 import { D, put, del, uid, setKV } from './db.js';
 import { sheet, form, toast, undo, fKm, fDate, fNum, fPpl, icon, esc, ask, isSimple } from './ui.js';
 import { isoToday, currentKm, kmPoints, tripOn, kmCheck, addMonths, addDays, lastFuelPrice } from './logic.js';
-import { CATS, ZONAS, DOC_TIPOS, vehicle } from './store.js';
+import { CATS, CAT_ICO, CAT_EJ, ZONAS, DOC_TIPOS, vehicle } from './store.js';
 import { PERFIL, ITV_CAT, itvMeses } from './perfil.js';
 import { refresh } from './router.js';
 import { onSubmit, normKey, R, KM_MAX, normPlate, checkPlate, parseNum } from './valid.js';
@@ -73,12 +73,19 @@ export function expenseSheet(e = {}, preset = {}) {
       const sync = () => {
         const fuel = cat.value === 'Combustible';
         F.filter(f => f.fuel).forEach(f => { const n = s.el.querySelector(`[name=${f.k}]`); (n.closest('.fld') || n.closest('.swr')).hidden = !fuel; });
-        conc.placeholder = fuel ? 'Gasolinera, p. ej. Repsol Lleida' : 'Ej. peaje AP-7, área de Cangas…';
+        conc.placeholder = CAT_EJ[cat.value] || '';
+        // La ayuda del importe («se calcula solo con litros y precio») solo vale para el gasóleo
+        const ih = s.el.querySelector('[name=importe]').closest('.fld').querySelector('small:not(.er)'); if (ih) ih.hidden = !fuel;
+        s.el.querySelectorAll('.catp [data-c]').forEach(b => { const on = b.dataset.c === cat.value; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
         let dl = s.el.querySelector('#dl-concepto');
         if (!dl) { dl = document.createElement('datalist'); dl.id = 'dl-concepto'; conc.after(dl); conc.setAttribute('list', 'dl-concepto'); }
         dl.innerHTML = used(D.expenses.filter(x => x.cat === cat.value), 'concepto').map(o => `<option value="${esc(o)}">`).join('');
         s.el.querySelector('h2').textContent = isNew ? (fuel ? 'Nuevo repostaje' : 'Nuevo gasto') : 'Editar gasto';
       };
+      // Categorías a la vista como botones (el desplegable escondía Equipamiento, Ferry u Otros)
+      cat.closest('.fld').classList.add('catf');
+      cat.insertAdjacentHTML('afterend', `<div class="catp" role="radiogroup" aria-label="Categoría">${CATS.map(c => `<button type="button" role="radio" data-c="${esc(c)}">${icon(CAT_ICO[c] || 'euro')}<span>${esc(c)}</span></button>`).join('')}</div>`);
+      s.el.querySelector('.catp').addEventListener('click', ev => { const b = ev.target.closest('[data-c]'); if (!b || cat.value === b.dataset.c) return; cat.value = b.dataset.c; cat.dispatchEvent(new Event('change', { bubbles: true })); });
       cat.onchange = sync; sync();
       fuelCalc(s.el);
       // Aviso visible de a qué viaje va el gasto; si cambias la fecha, se recalcula (salvo que hayas elegido tú el viaje)
@@ -361,7 +368,7 @@ export function vehicleSheet(onDone) {
 export function quickAdd() {
   const opts = [
     ['fuel', 'Repostaje', 'Litros, precio y km', () => expenseSheet({}, { cat: 'Combustible' })],
-    ['euro', isSimple() ? 'Otro gasto' : 'Gasto', 'Área, peaje, camping…', () => expenseSheet({}, { cat: 'Área / camping' })],
+    ['euro', isSimple() ? 'Otro gasto' : 'Gasto', 'Área, peaje, equipamiento…', () => expenseSheet({}, { cat: 'Área / camping' })],
     ['wrench', isSimple() ? 'Revisión hecha' : 'Mantenimiento', isSimple() ? 'Aceite, filtros, gas…' : 'Algo que has hecho', () => import('./mods/mant.js').then(m => m.pickTask())],
     ['gauge', 'Kilómetros', 'Actualizar el cuentakilómetros', odoSheet],
     ['map', 'Viaje', 'Planificar uno nuevo', () => { location.hash = '#/viajes/nuevo'; }],

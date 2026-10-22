@@ -291,7 +291,7 @@ export const GRUPOS = [
   ['fijos', 'Fijos', ['Seguro', 'Impuestos y tasas']],
   ['uso', 'Uso', ['Combustible', 'Peajes', 'Área / camping', 'Ferry']],
   ['mant', 'Mantenimiento', ['Mantenimiento']],
-  ['equipo', 'Equipo y otros', ['Equipamiento', 'Otros']],
+  ['equipo', 'Equipamiento y otros', ['Equipamiento', 'Otros']],
 ];
 export const grupoDe = cat => (GRUPOS.find(g => g[2].includes(cat)) || GRUPOS[3])[0];
 
