@@ -29,7 +29,7 @@ export function render(view, params) {
   view.querySelector('#add').onclick = () => tripMeta();
   const a2 = view.querySelector('#add2'); if (a2) a2.onclick = () => tripMeta();
   view.querySelectorAll('[data-del]').forEach(b => (b.onclick = () => deleteTrip(D.trips.find(t => t.id === b.dataset.del))));
-  if (params[0] === 'nuevo') { history.replaceState(null, '', '#/viajes'); tripMeta(); }
+  if (params[0] === 'nuevo') { history.replaceState(history.state, '', '#/viajes'); tripMeta(); }
 }
 export const nightsOf = (t, today = isoToday()) => {
   if (t.inicio && t.fin && t.fin > t.inicio) return daysBetween(t.inicio, t.fin);

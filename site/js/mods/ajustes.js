@@ -8,6 +8,7 @@ import { isoToday, buildICS, currentKm } from '../logic.js';
 import { vehicleSheet } from '../forms.js';
 import { exportCSV } from './gastos.js';
 import { go, refresh } from '../router.js';
+import { goMain } from '../atras.js';
 import { PRESETS, FONT_SIZES, swatchHex, hexToHS, presetIndex, savePrefs } from '../theme.js';
 import { onSubmit, normKey } from '../valid.js';
 
@@ -31,7 +32,7 @@ export function render(view, [sec]) {
   view.innerHTML = `<div class="vh"><div><h1>Ajustes</h1></div></div>
     <div class="stk"><div class="seg sc" id="secs" role="tablist">${SECS.map(([k, l]) => `<button role="tab" data-s="${k}" class="${k === cur[0] ? 'on' : ''}" aria-selected="${k === cur[0]}">${l}</button>`).join('')}</div></div>
     <div class="setw" id="sb"></div><div class="pb"></div>`;
-  view.querySelector('#secs').onclick = e => { const b = e.target.closest('[data-s]'); if (b) go('ajustes/' + b.dataset.s); };
+  view.querySelector('#secs').onclick = e => { const b = e.target.closest('[data-s]'); if (b) goMain('ajustes/' + b.dataset.s); };
   const on = view.querySelector('#secs .on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' });
   const body = view.querySelector('#sb');
   cur[2](body);

@@ -16,7 +16,7 @@ export function render(view, params = []) {
   view.innerHTML = `<div class="vh"><div><h1>Gastos y documentos</h1></div></div>
     <div class="tools"><div class="seg" id="seg">${tabs.map(([k, l]) => `<button data-v="${k}" class="${tab === k ? 'on' : ''}">${l}${k === 'docs' && docAlert ? ` (${docAlert})` : ''}</button>`).join('')}</div></div>
     <div id="body"></div><div class="pb"></div>`;
-  view.querySelector('#seg').onclick = e => { const b = e.target.closest('[data-v]'); if (b) { tab = b.dataset.v; history.replaceState(null, '', '#/gastos/' + tab); render(view, [tab]); } };
+  view.querySelector('#seg').onclick = e => { const b = e.target.closest('[data-v]'); if (b) { tab = b.dataset.v; history.replaceState(history.state, '', '#/gastos/' + tab); render(view, [tab]); } };
   const body = view.querySelector('#body');
   ({ gastos, docs: docsTab, combustible: renderFuel })[(tab === 'cons' ? 'combustible' : tab)](body, dw);
 }

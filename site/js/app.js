@@ -11,6 +11,7 @@ import * as gastos from './mods/gastos.js';
 import * as ajustes from './mods/ajustes.js';
 import * as stats from './mods/stats.js';
 import { quickAdd } from './forms.js';
+import { initBack, goMain } from './atras.js';
 
 route('inicio', inicio.render);
 route('mant', mant.render);
@@ -39,6 +40,11 @@ function nav(active) {
 onRender(nav);
 
 $('#fab').onclick = quickAdd;
+// Pantallas principales: no se apilan en el historial (ver atras.js)
+document.addEventListener('click', e => {
+  const a = e.target.closest('#bb a, #topnav a, #cfg'); if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  e.preventDefault(); goMain(a.getAttribute('href').replace(/^#\//, ''));
+});
 // El botón + se aparta al bajar (para no tapar cifras) y vuelve al subir
 let lastY = 0;
 addEventListener('scroll', () => { const y = scrollY, f = $('#fab'); if (Math.abs(y - lastY) < 8) return; f.classList.toggle('off', prefs().simple === false && y > lastY && y > 120); lastY = y; }, { passive: true });
@@ -120,6 +126,7 @@ if (swOK) {
   applyLook();
   // Hasta configurar el vehículo solo existe la bienvenida
   setGuard(name => (!getKV('setup', false) && name !== 'inicio' ? 'inicio' : null));
-  if (!location.hash.replace(/^#\/?/, '')) location.hash = '#/' + (prefs().start || 'inicio');
+  if (!location.hash.replace(/^#\/?/, '')) history.replaceState(history.state, '', '#/' + (prefs().start || 'inicio'));
+  initBack();
   await refresh(false);
 })();

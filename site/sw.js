@@ -7,11 +7,11 @@
 // - Cada versión publicada trae un sw.js distinto; el navegador lo detecta, guarda la nueva en segundo plano y la app
 //   avisa. La recarga nunca ocurre con un formulario a medias (lo decide la app, no el service worker).
 // - Leaflet y las fuentes se guardan aparte (EXT) para no perderlas en cada actualización.
-const V = 'cz-2026-10-22-6';
+const V = 'cz-2026-10-22-7';
 const EXT = 'cz-ext-1';
 // './' y no 'index.html': Cloudflare Pages redirige /index.html → / y una respuesta redirigida no sirve para abrir la página
 const SHELL = ['./', 'css/app.css', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/apple-touch-icon.png',
-  'js/app.js', 'js/db.js', 'js/logic.js', 'js/ui.js', 'js/store.js', 'js/router.js', 'js/forms.js', 'js/valid.js', 'js/perfil.js', 'js/theme.js', 'js/install.js',
+  'js/app.js', 'js/db.js', 'js/logic.js', 'js/ui.js', 'js/store.js', 'js/router.js', 'js/forms.js', 'js/valid.js', 'js/perfil.js', 'js/theme.js', 'js/install.js', 'js/atras.js',
   'js/mods/inicio.js', 'js/mods/mant.js', 'js/mods/viajes.js', 'js/mods/gastos.js', 'js/mods/combustible.js', 'js/mods/stats.js', 'js/mods/ajustes.js'];
 
 self.addEventListener('install', e => {

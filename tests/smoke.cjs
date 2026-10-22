@@ -19,7 +19,7 @@ async function run(browser, label, viewport, mobile) {
   p.on('pageerror', e => errs.push(e.message));
   p.on('dialog', d => d.accept());
   // Se sirve site/ directamente; fuera de la app no hay red (mapa, rutas y fuentes fallan como sin conexión)
-  await p.route('**/*', r => {
+  await ctx.route('**/*', r => {
     const u = r.request().url();
     if (!u.startsWith(BASE)) return r.abort();
     const rel = decodeURIComponent(new URL(u).pathname.slice(1));
@@ -322,6 +322,31 @@ async function run(browser, label, viewport, mobile) {
   await p.click('#hv'); await p.waitForTimeout(300); await save();
   const vt = (await Dm()).trips.find(t => t.id === vid);
   ok(vt.fin === hoy && vt.cerrado && await p.locator('#hv').count() === 0, 'vuelves antes: el viaje se cierra con la fecha de hoy');
+
+  // 11) Botón Atrás como en Android: las pantallas principales no se apilan; en Inicio, dos veces para salir
+  {
+    const q = await ctx.newPage(); q.on('pageerror', e => errs.push(e.message));
+    await q.goto(BASE + '#/inicio'); await q.waitForTimeout(600);
+    const back = async () => { await q.evaluate(() => history.back()); await q.waitForTimeout(450); };
+    const at = () => q.evaluate(() => location.hash);
+    const navTo = async k => { await q.click(mobile ? `#bb a[href="#/${k}"]` : `#topnav a[href="#/${k}"]`); await q.waitForTimeout(350); };
+    await navTo('gastos');
+    await q.reload(); await q.waitForTimeout(700); // como al aplicar una actualización
+    await navTo('viajes');
+    await q.click('#view .trow a >> nth=0'); await q.waitForTimeout(700);
+    ok((await at()).startsWith('#/viaje/'), 'Atrás: abierto un viaje desde Viajes');
+    await back(); ok(await at() === '#/viajes', 'Atrás desde un viaje vuelve a la lista de Viajes');
+    await back(); ok(await at() === '#/inicio', 'Atrás desde Viajes va a Inicio (no recorre Gastos)');
+    await back();
+    ok(await at() === '#/inicio' && (await q.innerText('#toast')).includes('Pulsa atrás otra vez para salir'), 'Atrás en Inicio: «Pulsa atrás otra vez para salir» y sigue en la app');
+    await q.waitForTimeout(3300);
+    await back(); ok(await at() === '#/inicio', 'pasados 3 s, Atrás vuelve a avisar (no sale por sorpresa)');
+    await q.click('#qf'); await q.waitForTimeout(300); await back();
+    ok(await q.locator('.sheet').count() === 0 && await at() === '#/inicio', 'con un formulario abierto, Atrás lo cierra y no avisa de salir');
+    await back(); await q.evaluate(() => history.back()); await q.waitForTimeout(600);
+    ok(!q.url().startsWith(BASE), 'dos veces Atrás seguidas en Inicio: sale de la app (' + q.url().slice(0, 30) + ')');
+    await q.close();
+  }
 
   ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await ctx.close();
