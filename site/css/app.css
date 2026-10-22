@@ -580,3 +580,10 @@ body:has(#vnb:not([hidden])) .toast{top:calc(70px + env(safe-area-inset-top));bo
 .catp button.on{border-color:var(--em);background:var(--tint);color:var(--em);box-shadow:0 0 0 1px var(--em) inset}
 .catp button.on svg{color:var(--em)}
 html.simple .catp button{min-height:54px;font-size:calc(15.5px*var(--fs,1))}
+.ask-b.v{flex-direction:column}.ask-b.v .btn{flex:none;width:100%}
+/* Papelera junto a cada gasto de una lista (el gasto se abre tocando la fila, se borra con la papelera) */
+.erow{display:flex;align-items:center;border-top:1px solid var(--bd)}
+.list>.erow:first-child,.list>[hidden]+.erow{border-top:0}
+.erow>.row{border-top:0;flex:1;min-width:0}
+.erow>.ib{margin-right:8px;width:44px;height:44px}
+.erow>.ib:active{color:var(--bad)}

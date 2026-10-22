@@ -165,6 +165,14 @@ async function run(browser, label, viewport, mobile) {
   ok((await Dm()).expenses.some(e => e.cat === 'Equipamiento' && e.importe === 320), 'gasto de Equipamiento guardado');
   await p.goto(BASE + '#/stats'); await p.waitForTimeout(400);
   ok((await p.innerText('#view')).replace(/\u00a0/g, ' ').match(/Equipamiento y otros[\s\S]{0,80}320 €/), 'Estadísticas: «Equipamiento y otros» suma el gasto');
+  // 9b3) Borrar un gasto con la papelera de la lista (pregunta, borra, se puede deshacer)
+  await p.goto(BASE + '#/gastos/gastos'); await p.waitForTimeout(400);
+  await p.click('#view .erow:has-text("Toldo nuevo") [data-dx]'); await p.waitForTimeout(300);
+  ok(await p.locator('.ask').count() === 1 && (await p.innerText('.ask')).includes('320'), 'papelera de un gasto: pregunta con el importe');
+  await p.click('.ask [data-ok]'); await p.waitForTimeout(500);
+  ok(!(await Dm()).expenses.some(e => e.concepto === 'Toldo nuevo') && await p.locator('#view .erow:has-text("Toldo nuevo")').count() === 0, 'gasto borrado y fuera de la lista');
+  await p.click('#undo button'); await p.waitForTimeout(500);
+  ok((await Dm()).expenses.some(e => e.concepto === 'Toldo nuevo') && await p.locator('#view .erow:has-text("Toldo nuevo")').count() === 1, 'deshacer devuelve el gasto');
   // 9c) Botón Atrás con una pregunta abierta: la cancela y la hoja sigue
   await p.goto(BASE + '#/inicio'); await p.waitForTimeout(300);
   await p.click('#km'); await p.waitForTimeout(300); await p.fill('.sheet [name=km]', '147000');
@@ -322,6 +330,27 @@ async function run(browser, label, viewport, mobile) {
   await p.click('#hv'); await p.waitForTimeout(300); await save();
   const vt = (await Dm()).trips.find(t => t.id === vid);
   ok(vt.fin === hoy && vt.cerrado && await p.locator('#hv').count() === 0, 'vuelves antes: el viaje se cierra con la fecha de hoy');
+  // 10l) Borrar un viaje con gastos: se puede borrar todo y el resumen deja de contarlos; o conservar los gastos
+  const suma = async () => (await Dm()).expenses.reduce((a, e) => a + (+e.importe || 0), 0);
+  const antes = await suma(), deRuta = (await Dm()).expenses.filter(e => e.viajeId === rid);
+  const deRutaSum = deRuta.reduce((a, e) => a + (+e.importe || 0), 0);
+  await p.goto(BASE + '#/viaje/' + rid); await p.waitForTimeout(600);
+  ok(await p.locator('#gl .erow [data-dx]').count() === deRuta.length && deRuta.length >= 2, 'los gastos del viaje tienen papelera');
+  await p.click('#dtr'); await p.waitForTimeout(300);
+  ok(await p.locator('.ask [data-alt]').count() === 1 && (await p.innerText('.ask')).includes('gastos'), 'borrar viaje con gastos: pregunta si borrarlos también');
+  await p.click('.ask [data-ok]'); await p.waitForTimeout(700);
+  ok(Math.abs((await suma()) - (antes - deRutaSum)) < 0.01 && !(await Dm()).trips.some(t => t.id === rid), 'viaje y sus gastos borrados: el total baja ' + deRutaSum + ' €');
+  await p.goto(BASE + '#/stats'); await p.waitForTimeout(400);
+  const fmt = n => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0, useGrouping: 'always' }).format(n);
+  { const yr = await L(() => import('./js/logic.js').then(m => m.isoToday().slice(0, 4)));
+    const tot = (await Dm()).expenses.filter(e => e.fecha.startsWith(yr)).reduce((a, e) => a + (+e.importe || 0), 0);
+    ok((await p.innerText('.kpis')).includes(fmt(tot)), 'el resumen ya no cuenta los gastos del viaje borrado (' + fmt(tot) + ')'); }
+  await p.goto(BASE + '#/viajes'); await p.waitForTimeout(300);
+  await p.click('#undo button'); await p.waitForTimeout(700);
+  ok(Math.abs((await suma()) - antes) < 0.01 && (await Dm()).trips.some(t => t.id === rid), 'deshacer devuelve el viaje y sus gastos');
+  await p.goto(BASE + '#/viaje/' + rid); await p.waitForTimeout(600);
+  await p.click('#dtr'); await p.waitForTimeout(300); await p.click('.ask [data-alt]'); await p.waitForTimeout(700);
+  ok(Math.abs((await suma()) - antes) < 0.01 && (await Dm()).expenses.filter(e => deRuta.some(x => x.id === e.id)).every(e => !e.viajeId), '«Borrar solo el viaje»: los gastos se quedan, sin viaje');
 
   // 11) Botón Atrás como en Android: las pantallas principales no se apilan; en Inicio, dos veces para salir
   {

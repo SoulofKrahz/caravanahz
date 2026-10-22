@@ -59,13 +59,14 @@ export function undo(msg, fn) {
 }
 
 /* ---------- Preguntas (sustituye a confirm(): botones grandes y con texto claro) ----------
-   ask({ title, text, ok: 'Sí, borrar', cancel: 'No', danger: true }) → Promise<boolean> */
+   ask({ title, text, ok: 'Sí, borrar', cancel: 'No', danger: true }) → Promise<boolean>
+   Con alt: 'Otra opción' hay un tercer botón y la promesa da true | 'alt' | false (botones uno debajo de otro) */
 let curAsk = null; // la pregunta abierta: el botón Atrás del móvil la cancela (como en cualquier app Android)
-export function ask({ title, text = '', ok = 'Sí', cancel = 'Cancelar', danger = false }) {
+export function ask({ title, text = '', ok = 'Sí', cancel = 'Cancelar', danger = false, alt = '' }) {
   return new Promise(res => {
     const ov = document.createElement('div'), dl = document.createElement('div');
     ov.className = 'ov show ask-ov'; dl.className = 'ask'; dl.setAttribute('role', 'alertdialog'); dl.setAttribute('aria-modal', 'true'); dl.setAttribute('aria-label', title);
-    dl.innerHTML = `<h2>${esc(title)}</h2>${text ? `<p>${esc(text).replace(/\n/g, '<br>')}</p>` : ''}<div class="ask-b"><button class="btn g" data-no>${esc(cancel)}</button><button class="btn ${danger ? 'dd' : ''}" data-ok>${esc(ok)}</button></div>`;
+    dl.innerHTML = `<h2>${esc(title)}</h2>${text ? `<p>${esc(text).replace(/\n/g, '<br>')}</p>` : ''}${alt ? `<div class="ask-b v"><button class="btn ${danger ? 'dd' : ''}" data-ok>${esc(ok)}</button><button class="btn g" data-alt>${esc(alt)}</button><button class="btn g" data-no>${esc(cancel)}</button></div>` : `<div class="ask-b"><button class="btn g" data-no>${esc(cancel)}</button><button class="btn ${danger ? 'dd' : ''}" data-ok>${esc(ok)}</button></div>`}`;
     document.body.append(ov, dl);
     const prev = document.activeElement;
     if (curAsk) curAsk(false); // nunca dos preguntas a la vez
@@ -75,8 +76,9 @@ export function ask({ title, text = '', ok = 'Sí', cancel = 'Cancelar', danger 
     curAsk = end;
     dl.querySelector('[data-ok]').onclick = () => end(true);
     dl.querySelector('[data-no]').onclick = () => end(false);
+    if (alt) dl.querySelector('[data-alt]').onclick = () => end('alt');
     ov.onclick = () => end(false);
-    setTimeout(() => dl.querySelector(danger ? '[data-no]' : '[data-ok]').focus(), 30);
+    setTimeout(() => dl.querySelector(danger ? '[data-no]' : '[data-ok]').focus({ preventScroll: true }), 30);
   });
 }
 const DISCARD = { title: '¿Salir sin guardar?', text: 'Lo que has escrito se perderá.', ok: 'Salir sin guardar', cancel: 'Seguir escribiendo', danger: true };

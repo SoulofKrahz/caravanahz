@@ -1,7 +1,7 @@
 // Formularios reutilizados desde varias pantallas: kilómetros, gastos, mantenimiento, documentos y vehículo.
 // Todas las comprobaciones viven aquí, junto a cada formulario.
 import { D, put, del, uid, setKV } from './db.js';
-import { sheet, form, toast, undo, fKm, fDate, fNum, fPpl, icon, esc, ask, isSimple } from './ui.js';
+import { sheet, form, toast, undo, fKm, fDate, fNum, fPpl, fEur, icon, esc, ask, isSimple } from './ui.js';
 import { isoToday, currentKm, kmPoints, tripOn, kmCheck, addMonths, addDays, lastFuelPrice } from './logic.js';
 import { CATS, CAT_ICO, CAT_EJ, ZONAS, DOC_TIPOS, vehicle } from './store.js';
 import { PERFIL, ITV_CAT, itvMeses } from './perfil.js';
@@ -42,6 +42,27 @@ export function odoSheet() {
         await s.close(); toast('Kilómetros actualizados'); refresh();
       })
   });
+}
+
+/* ---------- Borrar gastos (desde la lista, la hoja o al borrar un viaje) ---------- */
+/** Borra los gastos y devuelve la función que los recupera (con el mantenimiento al que estaban ligados) */
+export async function removeExpenses(list) {
+  const olds = list.map(e => ({ ...e })), svs = [];
+  for (const e of list) {
+    await del('expenses', e.id);
+    const sv = e.servicioId && D.services.find(x => x.id === e.servicioId);
+    if (sv) { svs.push({ ...sv }); await put('services', { ...sv, coste: '', gastoId: '' }); }
+  }
+  return async () => { for (const o of olds) await put('expenses', o); for (const sv of svs) await put('services', sv); };
+}
+/** Papelera de un gasto: pregunta (con el importe) y deja deshacer */
+export async function askDeleteExpense(e, after) {
+  if (!e) return;
+  const ok = await ask({ title: '¿Borrar este gasto?', text: `${e.concepto || e.cat} · ${fEur(e.importe)} · ${fDate(e.fecha)}${e.servicioId ? '\nEstá ligado a un mantenimiento: el mantenimiento se queda sin coste.' : ''}`, ok: 'Sí, borrar', cancel: 'No', danger: true });
+  if (!ok) return;
+  const restore = await removeExpenses([e]);
+  after && after();
+  undo('Gasto borrado', async () => { await restore(); after && after(); });
 }
 
 /* ---------- Gasto (incluye repostajes) ---------- */
@@ -120,11 +141,9 @@ export function expenseSheet(e = {}, preset = {}) {
       });
       const d = s.el.querySelector('[data-del]');
       if (d) d.onclick = async () => {
-        const old = { ...e }; await del('expenses', e.id);
-        let oldSv = null;
-        if (e.servicioId) { const sv = D.services.find(x => x.id === e.servicioId); if (sv) { oldSv = { ...sv }; await put('services', { ...sv, coste: '', gastoId: '' }); } }
+        const restore = await removeExpenses([D.expenses.find(x => x.id === e.id) || e]);
         await s.close(); refresh();
-        undo('Gasto eliminado', async () => { await put('expenses', old); if (oldSv) await put('services', oldSv); refresh(); });
+        undo('Gasto borrado', async () => { await restore(); refresh(); });
       };
     }
   });

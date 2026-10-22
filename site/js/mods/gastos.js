@@ -2,7 +2,8 @@ import { D } from '../db.js';
 import { esc, icon, fKm, fDate, fEur, fEur0, fNum, fPpl, fMonth, rel, stChip, download, toast } from '../ui.js';
 import { ctx, docsWithStatus, CATS, CAT_ICO, vehicle } from '../store.js';
 import { buildCSV, isoToday } from '../logic.js';
-import { expenseSheet, docSheet } from '../forms.js';
+import { expenseSheet, docSheet, askDeleteExpense } from '../forms.js';
+import { refresh } from '../router.js';
 import { kmInYear } from './inicio.js';
 import { renderFuel } from './combustible.js';
 import { normKey } from '../valid.js';
@@ -33,7 +34,7 @@ function gastos(el) {
     <select id="ct" aria-label="Categoría"><option value="">Todas las categorías</option>${CATS.map(c => `<option ${c === cat ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
     <span style="flex:1"></span><button class="tb" id="csv">${icon('dl')}CSV</button><button class="btn" id="add">${icon('plus')}Gasto</button></div>
     <div class="kpis k3">
-      <div class="kpi"><span class="l">Total ${year}</span><span class="v">${fEur0(tot)}</span><span class="s">${inY.length} apuntes</span></div>
+      <div class="kpi"><span class="l">Total ${year}</span><span class="v">${fEur0(tot)}</span><span class="s">${inY.length} ${inY.length === 1 ? 'apunte' : 'apuntes'}</span></div>
       <div class="kpi"><span class="l">Coste por km</span><span class="v">${km ? fNum(tot / km, 2) + ' €/km' : '—'}</span><span class="s">${km ? 'sobre ' + fKm(km) : 'Faltan km registrados'}</span></div>
       <div class="kpi"><span class="l">Media mensual</span><span class="v">${fEur0(tot / (year === String(new Date().getFullYear()) ? new Date().getMonth() + 1 : 12))}</span><span class="s">incluye seguro e impuestos</span></div>
     </div>
@@ -52,19 +53,20 @@ function gastos(el) {
     const k = normKey(gq.value); let n = 0, sum = 0;
     el.querySelectorAll('.list[data-m]').forEach(l => {
       let any = false;
-      l.querySelectorAll('[data-q]').forEach(r => { const ok = !k || r.dataset.q.includes(k); r.hidden = !ok; if (ok) { any = true; n++; sum += +(D.expenses.find(x => x.id === r.dataset.e) || {}).importe || 0; } });
+      l.querySelectorAll('[data-q]').forEach(r => { const ok = !k || r.dataset.q.includes(k); r.hidden = !ok; if (ok) { any = true; n++; sum += +(D.expenses.find(x => x.id === r.dataset.id) || {}).importe || 0; } });
       l.hidden = !any; el.querySelector(`.gh[data-m="${l.dataset.m}"]`).hidden = !any;
     });
     const p = el.querySelector('#gqn'); p.hidden = !k; p.textContent = n ? `${n} ${n === 1 ? 'gasto' : 'gastos'} · ${fEur(sum)}` : 'Nada coincide con la búsqueda';
   };
   el.querySelectorAll('[data-e]').forEach(b => (b.onclick = () => expenseSheet(D.expenses.find(x => x.id === b.dataset.e))));
+  el.querySelectorAll('[data-dx]').forEach(b => (b.onclick = () => askDeleteExpense(D.expenses.find(x => x.id === b.dataset.dx), refresh)));
 }
 
 function rowE(e) {
   const trip = e.viajeId && D.trips.find(t => t.id === e.viajeId);
   const sub = [fDate(e.fecha, { day: 'numeric', month: 'short' }), e.cat === 'Combustible' && e.litros ? `${fNum(e.litros)} L · ${fPpl(e.importe / e.litros)} €/L${e.lleno ? ' · lleno' : ''}` : e.cat, e.km ? fKm(e.km) : '', trip ? trip.nombre : ''].filter(Boolean).join(' · ');
   const q = normKey([e.concepto, e.cat, e.notas, trip && trip.nombre, String(e.importe).replace('.', ',')].filter(Boolean).join(' '));
-  return `<button class="row" data-e="${e.id}" data-q="${esc(q)}"><span class="ico">${icon(CAT_ICO[e.cat] || 'euro')}</span><span class="m"><b>${esc(e.concepto || e.cat)}</b><small>${esc(sub)}</small></span><span class="r"><b>${fEur(e.importe)}</b></span></button>`;
+  return `<div class="erow" data-q="${esc(q)}" data-id="${e.id}"><button class="row" data-e="${e.id}"><span class="ico">${icon(CAT_ICO[e.cat] || 'euro')}</span><span class="m"><b>${esc(e.concepto || e.cat)}</b><small>${esc(sub)}</small></span><span class="r"><b>${fEur(e.importe)}</b></span></button><button class="ib" data-dx="${e.id}" aria-label="Borrar el gasto ${esc(e.concepto || e.cat)}" title="Borrar">${icon('trash')}</button></div>`;
 }
 
 export function exportCSV() {

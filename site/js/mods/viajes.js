@@ -4,7 +4,7 @@ import { $, esc, icon, fKm, fDate, fDur, fEur, fNum, fPpl, rel, sheet, form, toa
 import { onSubmit, normKey, normText, R } from '../valid.js';
 import { STOP_TIPOS, NIGHT, prefs, vehicle } from '../store.js';
 import { isoToday, haversine, consumption, lastFuelPrice, daysBetween, addMonths, currentKm, tripCost, eur100Of, tripDone, tripOpen } from '../logic.js';
-import { expenseSheet, kmMsg } from '../forms.js';
+import { expenseSheet, kmMsg, removeExpenses, askDeleteExpense } from '../forms.js';
 import { go, refresh } from '../router.js';
 
 /* ---------- Lista ---------- */
@@ -89,18 +89,27 @@ function tripMeta(t = {}) {
   });
 }
 
-/** Borrar un viaje: pregunta antes, sus gastos se conservan y se puede deshacer (también devuelve los gastos) */
+/**
+ * Borrar un viaje. Si tiene gastos, se elige: borrarlos también (lo normal: así el resumen deja de contarlos)
+ * o conservarlos sin viaje. «Deshacer» lo devuelve todo.
+ */
 async function deleteTrip(t, before) {
-  const g = D.expenses.filter(e => e.viajeId === t.id).length;
-  if (!(await ask({ title: `¿Borrar el viaje «${t.nombre}»?`, text: g ? `Sus ${g} ${g === 1 ? 'gasto se conserva' : 'gastos se conservan'} en Gastos, sin viaje asignado.` : 'Se borran la ruta y las paradas.', ok: 'Sí, borrar', cancel: 'No', danger: true }))) return false;
-  const old = { ...t }, linked = D.expenses.filter(e => e.viajeId === t.id).map(e => e.id);
-  for (const e of D.expenses.filter(e => e.viajeId === t.id)) await put('expenses', { ...e, viajeId: '' });
+  const gs = D.expenses.filter(e => e.viajeId === t.id), g = gs.length, sum = gs.reduce((a, e) => a + (+e.importe || 0), 0);
+  const r = await ask(g
+    ? { title: `¿Borrar el viaje «${t.nombre}»?`, text: `Tiene ${g === 1 ? 'un gasto' : g + ' gastos'} (${fEur(sum)}). Si los borras, dejan de contar en el resumen y en Gastos.`, ok: g === 1 ? 'Borrar el viaje y su gasto' : 'Borrar el viaje y sus gastos', alt: g === 1 ? 'Borrar solo el viaje (conservar el gasto)' : 'Borrar solo el viaje (conservar los gastos)', cancel: 'No borrar nada', danger: true }
+    : { title: `¿Borrar el viaje «${t.nombre}»?`, text: 'Se borran la ruta y las paradas.', ok: 'Sí, borrar', cancel: 'No', danger: true });
+  if (!r) return false;
+  const old = { ...t }, linked = gs.map(e => e.id);
+  let restore = null;
+  if (r === true && g) restore = await removeExpenses(gs);
+  else for (const e of gs) await put('expenses', { ...e, viajeId: '' });
   await del('trips', t.id);
   if (before) await before();
   if (location.hash === '#/viajes') refresh(); else go('viajes');
-  undo('Viaje borrado', async () => {
+  undo(restore ? (g === 1 ? 'Viaje y gasto borrados' : 'Viaje y gastos borrados') : 'Viaje borrado', async () => {
     await put('trips', old);
-    for (const e of D.expenses.filter(e => linked.includes(e.id))) await put('expenses', { ...e, viajeId: old.id });
+    if (restore) await restore();
+    else for (const e of D.expenses.filter(e => linked.includes(e.id))) await put('expenses', { ...e, viajeId: old.id });
     refresh();
   });
   return true;
@@ -383,12 +392,13 @@ export function renderTrip(view, [id]) {
   // Gastos del viaje
   const gl = () => {
     const g = D.expenses.filter(e => e.viajeId === t.id).sort((a, b) => a.fecha.localeCompare(b.fecha)), tc = tripCost(t, D, e100), n = nightsOf(t);
-    const rowsHtml = g.map(e => `<button class="row" data-e="${e.id}"><span class="m"><b>${esc(e.concepto || e.cat)}</b><small>${fDate(e.fecha, { day: 'numeric', month: 'short' })} · ${esc(e.cat)}</small></span><span class="r"><b>${fEur(e.importe)}</b></span></button>`).join('');
+    const rowsHtml = g.map(e => `<div class="erow"><button class="row" data-e="${e.id}"><span class="m"><b>${esc(e.concepto || e.cat)}</b><small>${fDate(e.fecha, { day: 'numeric', month: 'short' })} · ${esc(e.cat)}</small></span><span class="r"><b>${fEur(e.importe)}</b></span></button><button class="ib" data-dx="${e.id}" aria-label="Borrar el gasto ${esc(e.concepto || e.cat)}" title="Borrar">${icon('trash')}</button></div>`).join('');
     const sum = (tc.other || tc.fuelPaid || tc.fuelUsed) ? `<div class="row tot"><span class="m"><b>${tc.estimated ? 'Coste del viaje ≈' : 'Total pagado'}</b>
         <small class="wrap">${tc.estimated ? `${fEur(tc.other)} en gastos + ${fEur(tc.fuelUsed)} de gasóleo consumido` : ''}${tc.perKm ? (tc.estimated ? ' · ' : '') + fNum(tc.perKm, 2) + ' €/km' : ''}${n && tc.total ? ' · ' + fEur(tc.total / n) + ' por noche' : ''}</small></span><span class="r"><b>${fEur(tc.total)}</b></span></div>` : '';
     $('#gl').innerHTML = g.length || tc.fuelUsed ? `<div class="list">${rowsHtml}${sum}</div>${tc.estimated && tc.fuelPaid ? `<p class="hint" style="margin:8px 4px 0">Los repostajes de la lista son lo que pagaste en ruta. En el coste del viaje cuento el gasóleo que consumiste (sales y vuelves con combustible en el depósito).</p>` : ''}`
       : `<div class="list"><div class="empty sm">Los gastos que asignes a este viaje aparecerán aquí.</div></div>`;
     $('#gl').querySelectorAll('[data-e]').forEach(b => (b.onclick = () => expenseSheet(D.expenses.find(x => x.id === b.dataset.e))));
+    $('#gl').querySelectorAll('[data-dx]').forEach(b => (b.onclick = () => askDeleteExpense(D.expenses.find(x => x.id === b.dataset.dx), () => { if (alive) { gl(); totals(); } })));
   };
   $('#ga').onclick = () => expenseSheet({}, { viajeId: t.id, cat: 'Área / camping', fecha: t.inicio && isoToday() > t.inicio && (!t.fin || isoToday() <= t.fin) ? isoToday() : t.inicio || isoToday() });
 

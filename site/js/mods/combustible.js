@@ -3,7 +3,8 @@ import { D } from '../db.js';
 import { esc, icon, fKm, fDate, fEur, fEur0, fNum, fPpl, uL100, isSimple } from '../ui.js';
 import { vehicle } from '../store.js';
 import { consumption, fuelStats, kmBetween, isoToday, addMonths } from '../logic.js';
-import { expenseSheet } from '../forms.js';
+import { expenseSheet, askDeleteExpense } from '../forms.js';
+import { refresh } from '../router.js';
 
 let periodo = 'anio';
 const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -81,7 +82,7 @@ export function renderFuel(el) {
     ${list.length ? `<div class="gh"><span>Repostajes ${r.txt}</span><span>${fEur(st.eur)}</span></div><div class="list">${list.map(e => {
       const t = tramoDe.get(e.fecha + '|' + (+e.km)), ppl = +e.litros > 0 ? +e.importe / +e.litros : null;
       const sub = [fDate(e.fecha, { day: 'numeric', month: 'short', year: 'numeric' }), e.litros ? fNum(e.litros, 2) + ' L' : '', ppl ? fPpl(ppl) + ' €/L' : '', e.km ? fKm(e.km) : 'sin km', e.lleno ? 'lleno' : 'parcial'].filter(Boolean).join(' · ');
-      return `<button class="row" data-e="${e.id}"><span class="ico">${icon('fuel')}</span><span class="m"><b>${esc(e.concepto || 'Repostaje')}</b><small class="wrap">${esc(sub)}</small>${t ? `<small class="tram wrap">Tramo: ${fKm(t.kmTramo)} · ${fNum(t.l100)} L/100 · ${fEur(t.eur100)}/100 km</small>` : ''}</span><span class="r"><b>${fEur(e.importe)}</b></span></button>`;
+      return `<div class="erow"><button class="row" data-e="${e.id}"><span class="ico">${icon('fuel')}</span><span class="m"><b>${esc(e.concepto || 'Repostaje')}</b><small class="wrap">${esc(sub)}</small>${t ? `<small class="tram wrap">Tramo: ${fKm(t.kmTramo)} · ${fNum(t.l100)} L/100 · ${fEur(t.eur100)}/100 km</small>` : ''}</span><span class="r"><b>${fEur(e.importe)}</b></span></button><button class="ib" data-dx="${e.id}" aria-label="Borrar el gasto ${esc(e.concepto || 'repostaje')}" title="Borrar">${icon('trash')}</button></div>`;
     }).join('')}</div>`
       : `<div class="empty"><h3>Sin repostajes ${r.txt}</h3><p>Apunta cada repostaje con los litros, el precio y los km. Con dos llenos te digo cuánto te cuesta cada 100 km.</p><button class="btn" id="add2">${icon('fuel')}Registrar repostaje</button></div>`}
     ${c.discarded ? `<p class="fm warn" style="margin-top:12px">He descartado ${c.discarded} ${c.discarded === 1 ? 'tramo' : 'tramos'} con un consumo imposible (menos de 3 o más de 40 L/100 km): revisa los km o los litros de esos repostajes.</p>` : ''}
@@ -91,4 +92,5 @@ export function renderFuel(el) {
   el.querySelector('#add').onclick = () => expenseSheet({}, { cat: 'Combustible' });
   const a2 = el.querySelector('#add2'); if (a2) a2.onclick = () => expenseSheet({}, { cat: 'Combustible' });
   el.querySelectorAll('[data-e]').forEach(b => (b.onclick = () => expenseSheet(D.expenses.find(x => x.id === b.dataset.e))));
+  el.querySelectorAll('[data-dx]').forEach(b => (b.onclick = () => askDeleteExpense(D.expenses.find(x => x.id === b.dataset.dx), refresh)));
 }
