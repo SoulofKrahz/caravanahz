@@ -3,7 +3,8 @@
 #   CLOUDFLARE_API_TOKEN  (token con permiso Account → Cloudflare Pages → Edit)
 #   CLOUDFLARE_ACCOUNT_ID (ID de la cuenta de Cloudflare donde vive Caravanahz)
 # Variable (pestaña Variables): CF_PROJECT = nombre del proyecto de Pages (caravanahz).
-# Si el proyecto no existe en esa cuenta, se crea solo en la primera publicación.
+# El proyecto de Pages ya existe (se creó en la primera publicación). Si algún día se borra, créalo con:
+#   npx wrangler pages project create caravanahz --production-branch=main
 name: Publicar en Cloudflare Pages
 on:
   push:
@@ -51,13 +52,6 @@ jobs:
       - uses: actions/checkout@v5
       - name: Generar version.txt (para el aviso de versión nueva)
         run: sed -n "s/.*export const VER = '\([^']*\)'.*/\1/p" site/js/store.js > site/version.txt && cat site/version.txt && test -s site/version.txt
-      - name: Crear el proyecto de Pages si aún no existe
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages project create ${{ vars.CF_PROJECT }} --production-branch=main
-        continue-on-error: true
       - uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
