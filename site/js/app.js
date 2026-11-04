@@ -101,7 +101,12 @@ const regUpdate = async () => { try { const r = swOK && (await navigator.service
 // Después de actualizar, un aviso confirma la versión nueva (así se sabe que ha funcionado)
 {
   let prev = null; try { prev = localStorage.getItem('cz_ver'); localStorage.setItem('cz_ver', VER); } catch (e) {}
-  if (prev && prev !== VER) setTimeout(() => toast(`Caravanahz actualizada (versión ${VER})`), 900);
+  // Si se actualizó sola con la app en segundo plano, el aviso espera a que vuelvas a ella (si no, pasaría sin verse)
+  const say = () => setTimeout(() => toast(`Caravanahz actualizada a la versión ${VER}`), 900);
+  if (prev && prev !== VER) {
+    if (!document.hidden) say();
+    else { const v = () => { if (!document.hidden) { document.removeEventListener('visibilitychange', v); say(); } }; document.addEventListener('visibilitychange', v); }
+  }
 }
 
 /* PWA */
