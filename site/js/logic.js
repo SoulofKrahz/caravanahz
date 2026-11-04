@@ -217,15 +217,19 @@ export function consumption(expenses) {
  * lleno y vuelves con lo que quede. El gasóleo del viaje se calcula con los km (reales si los hay,
  * si no los de la ruta) y tu coste real cada 100 km; lo pagado en ruta se muestra aparte.
  */
-export function tripCost(t, D, eur100 = null) {
+export function tripCost(t, D, eur100 = null, today = isoToday()) {
   const kmReal = t.kmIni && t.kmFin ? t.kmFin - t.kmIni : 0, km = kmReal || +t.kmRuta || 0;
   const ex = D.expenses.filter(e => e.viajeId === t.id);
   const fuelPaid = ex.filter(e => e.cat === 'Combustible').reduce((a, e) => a + (+e.importe || 0), 0);
   const other = ex.filter(e => e.cat !== 'Combustible').reduce((a, e) => a + (+e.importe || 0), 0);
-  const fuelUsed = eur100 && km ? km * eur100 / 100 : null;
-  const fuel = fuelUsed ?? fuelPaid; // sin consumo conocido, lo pagado es la mejor aproximación
-  const total = other + fuel;
-  return { km, kmReal: !!kmReal, fuelUsed, fuelPaid, other, total, perKm: km && total ? total / km : null, estimated: fuelUsed !== null };
+  const paid = other + fuelPaid; // la suma de la lista de gastos del viaje
+  const fuelEst = eur100 && km ? km * eur100 / 100 : null;
+  // Mientras el viaje no ha terminado, el coste es lo pagado hasta ahora (el gasóleo de la ruta solo es una previsión).
+  // Terminado, el gasóleo que cuenta es el consumido (km × tu coste cada 100 km), no lo que echaste en ruta.
+  const done = tripDone(t, today);
+  const fuelUsed = done ? fuelEst : null;
+  const total = other + (fuelUsed ?? fuelPaid);
+  return { km, kmReal: !!kmReal, fuelUsed, fuelPlan: done ? null : fuelEst, fuelPaid, other, paid, total, done, perKm: done && km && total ? total / km : null, estimated: fuelUsed !== null };
 }
 
 /** € reales cada 100 km de tu historial; si aún no hay dos llenos, consumo medio × último precio */
@@ -323,6 +327,13 @@ export function series(D, keys, unit = 'm') {
     const c = costBreakdown(D.expenses, from, to);
     return { k, ...c.grupos, total: c.total, km: kmBetween(D, from, to) || 0 };
   });
+}
+
+/** Noches de un viaje: por sus fechas; abierto (sin vuelta), las que llevas fuera; sin fechas, las pernoctas marcadas */
+export function tripNights(t, nightTypes, today = isoToday()) {
+  if (t.inicio && t.fin && t.fin > t.inicio) return daysBetween(t.inicio, t.fin);
+  const st = (t.paradas || []).filter(p => nightTypes.has(p.tipo)).length;
+  return tripOpen(t, today) ? Math.max(daysBetween(t.inicio, today), st) : st;
 }
 
 /** Noches fuera en [from, to]: por fechas del viaje, o por pernoctas marcadas si no hay vuelta */

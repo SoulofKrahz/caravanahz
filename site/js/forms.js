@@ -196,16 +196,23 @@ export function serviceSheet(task = null, sv = {}) {
         if (task) { rec.nombre = task.nombre; rec.zona = task.zona; }
         delete rec.crearGasto;
         if (!rec.id) rec.id = uid();
-        if (isNew && v.crearGasto && v.coste > 0) {
-          const g = await put('expenses', { fecha: v.fecha, cat: 'Mantenimiento', importe: v.coste, concepto: rec.nombre + (v.taller ? ' · ' + v.taller : ''), km: v.km, servicioId: rec.id });
-          rec.gastoId = g.id;
-        } else if (!isNew && rec.gastoId) {
+        // El gasto de la revisión: si la fecha cae en un viaje, cuenta en ese viaje (una avería en ruta es coste del viaje)
+        const newGasto = async () => {
+          const tr = tripOn(D.trips, v.fecha);
+          const g = await put('expenses', { fecha: v.fecha, cat: 'Mantenimiento', importe: v.coste, concepto: rec.nombre + (v.taller ? ' · ' + v.taller : ''), km: v.km, servicioId: rec.id, viajeId: tr ? tr.id : '' });
+          rec.gastoId = g.id; return tr;
+        };
+        let enViaje = null;
+        if (isNew && v.crearGasto && v.coste > 0) enViaje = await newGasto();
+        // Al editar: si antes no tenía coste y ahora sí, se crea su gasto (si no, el coste no contaría en ningún total)
+        else if (!isNew && !rec.gastoId && v.coste > 0 && !(+sv.coste > 0)) enViaje = await newGasto();
+        else if (!isNew && rec.gastoId) {
           const g = D.expenses.find(x => x.id === rec.gastoId);
           if (g) { if (v.coste > 0) await put('expenses', { ...g, importe: v.coste, fecha: v.fecha, km: v.km }); else { await del('expenses', g.id); rec.gastoId = ''; } }
         }
         await put('services', rec);
         if (rec.tareaId) await syncTaskLast(rec.tareaId);
-        await s.close(); toast(isNew ? 'Mantenimiento registrado' : 'Registro actualizado'); refresh();
+        await s.close(); toast((isNew ? 'Mantenimiento registrado' : 'Registro actualizado') + (enViaje ? ` · gasto apuntado en el viaje ${enViaje.nombre}` : '')); refresh();
       });
       const d = s.el.querySelector('[data-del]');
       if (d) d.onclick = async () => {
@@ -280,7 +287,7 @@ export function docSheet(d = {}) {
     { k: 'nombre', l: 'Compañía o detalle', ph: 'Ej. Mapfre, Estación ITV…', maxLen: 60 },
     { k: 'vence', l: 'Caduca el', t: 'date', req: 'Indica la fecha de caducidad', minDate: '2000-01-01', maxDate: () => addMonths(isoToday(), 12 * 20) },
     { k: 'avisoDias', adv: 1, l: 'Avisar con (días)', t: 'number', step: 1, int: true, min: 0, max: 365, req: 'Indica con cuántos días avisar' },
-    { k: 'importe', l: 'Importe (€)', t: 'number', step: 0.01, min: 0, max: 20000, dec: 2, thou: true, help: 'Para el aviso de renovación' },
+    { k: 'importe', l: 'Importe (€)', t: 'number', step: 0.01, min: 0, max: 20000, dec: 2, thou: true, help: 'Solo para recordarte el precio: no se suma en Gastos. Al pulsar «Renovar» puedes apuntarlo como gasto.' },
     { k: 'ref', adv: 1, l: 'Nº de póliza / referencia', ph: 'Opcional', maxLen: 40 },
     { k: 'tel', l: 'Teléfono de asistencia', t: 'tel', ph: 'Opcional', pattern: [/^\+?[0-9 ()-]{6,20}$/, 'Teléfono no válido (solo números, espacios y +)'] },
     { k: 'notas', adv: 1, l: 'Notas', t: 'textarea', maxLen: 2000 },

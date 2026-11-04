@@ -43,6 +43,11 @@ const tc=L.tripCost({id:'v',kmIni:143000,kmFin:144200,kmRuta:1105},Dt,12.87);
 a(tc.km===1200 && tc.kmReal && Math.abs(tc.fuelUsed-154.44)<1e-9 && Math.abs(tc.total-209.04)<1e-9 && tc.fuelPaid===97.66,'coste del viaje con gasóleo consumido '+JSON.stringify(tc));
 const tc2=L.tripCost({id:'v',kmRuta:0},Dt,null);
 a(!tc2.estimated && Math.abs(tc2.total-152.26)<1e-9,'sin consumo conocido: lo pagado');
+// Viaje en curso: el coste es lo pagado hasta ahora; el gasóleo de la ruta solo es previsión
+const tc3=L.tripCost({id:'v',inicio:'2026-11-01',kmIni:143000,kmRuta:1105},Dt,12.87,'2026-11-04');
+a(!tc3.done && !tc3.estimated && Math.abs(tc3.total-152.26)<1e-9 && Math.abs(tc3.paid-152.26)<1e-9 && Math.abs(tc3.fuelPlan-142.2135)<1e-6,'viaje en curso: coste = lo pagado y gasóleo previsto aparte '+JSON.stringify(tc3));
+a(Math.abs(tc.paid-152.26)<1e-9,'lo pagado = la suma de la lista de gastos del viaje');
+a(L.tripNights({inicio:'2026-11-01'},new Set(['area']),'2026-11-04')===3 && L.tripNights({inicio:'2026-11-01',fin:'2026-11-06'},new Set(),'2026-11-04')===5,'noches del viaje: abierto hasta hoy, cerrado por fechas');
 // v0.6: estadísticas
 a(L.monthsBetween('2025-11-15','2026-02-01').join()==='2025-11,2025-12,2026-01,2026-02','meses entre fechas');
 const cb=L.costBreakdown([{fecha:'2026-01-15',cat:'Seguro',importe:400},{fecha:'2026-02-01',cat:'Combustible',importe:80},{fecha:'2026-02-03',cat:'Mantenimiento',importe:145},{fecha:'2025-12-01',cat:'Peajes',importe:10}],'2026-01-01','2026-12-31');

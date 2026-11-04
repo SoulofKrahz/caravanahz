@@ -3,7 +3,7 @@ import { D, put, del, uid } from '../db.js';
 import { $, esc, icon, fKm, fDate, fDur, fEur, fNum, fPpl, rel, sheet, form, toast, undo, ask } from '../ui.js';
 import { onSubmit, normKey, normText, R } from '../valid.js';
 import { STOP_TIPOS, NIGHT, prefs, vehicle } from '../store.js';
-import { isoToday, haversine, consumption, lastFuelPrice, daysBetween, addMonths, currentKm, tripCost, eur100Of, tripDone, tripOpen } from '../logic.js';
+import { isoToday, haversine, consumption, lastFuelPrice, daysBetween, addMonths, currentKm, tripCost, eur100Of, tripDone, tripOpen, tripNights } from '../logic.js';
 import { expenseSheet, kmMsg, removeExpenses, askDeleteExpense } from '../forms.js';
 import { go, refresh } from '../router.js';
 
@@ -18,10 +18,12 @@ export function render(view, params) {
   const row = t => { const n = nightsOf(t), tc = tripCost(t, D, e100), real = t.kmIni && t.kmFin;
     return `<div class="trow"><a class="row" href="#/viaje/${t.id}"><span class="ico">${icon('map')}</span><span class="m"><b>${esc(t.nombre)}</b>
       <small>${t.inicio ? fDate(t.inicio) + (t.inicio > today ? ' (' + rel(t.inicio) + ')' : tripOpen(t, today) ? ' · de viaje, sin fecha de vuelta' : '') : 'Sin fecha'} · ${kmOf(t) ? fKm(kmOf(t)) + (real ? '' : ' previstos') : pl((t.paradas || []).length, 'parada', 'paradas')}${n ? ' · ' + pl(n, 'noche', 'noches') : ''}</small></span>
-      <span class="r">${tc.total && tripDone(t, today) ? `<b>${fEur(tc.total)}</b>${tc.estimated ? '<small>coste ≈</small>' : ''}` : ''}</span></a>
+      <span class="r">${tc.total ? `<b>${fEur(tc.total)}</b><small>${tc.estimated ? 'coste ≈' : tc.done ? 'pagado' : t.inicio && t.inicio <= today ? 'llevas pagado' : 'ya pagado'}</small>` : ''}</span></a>
       <button class="ib" data-del="${t.id}" aria-label="Borrar el viaje ${esc(t.nombre)}" title="Borrar">${icon('trash')}</button></div>`; };
 
-  view.innerHTML = `<div class="vh"><div><h1>Viajes</h1><p>${past.length ? `${pl(past.length, 'viaje hecho', 'viajes hechos')} · ${fKm(kmTot)} · ${pl(nights, 'noche', 'noches')}` : up.length ? pl(up.length, 'viaje planificado', 'viajes planificados') : 'Ningún viaje todavía'}</p></div><button class="btn" id="add">${icon('plus')}Viaje</button></div>
+  view.innerHTML = `<div class="vh"><div><h1>Viajes</h1><p>${(() => { const cur = up.filter(t => t.inicio && t.inicio <= today).length, plan = up.length - cur;
+      const parts = [cur ? (cur === 1 ? 'De viaje ahora' : `${cur} viajes en curso`) : '', past.length ? `${pl(past.length, 'viaje hecho', 'viajes hechos')} · ${fKm(kmTot)} · ${pl(nights, 'noche', 'noches')}` : '', !past.length && plan ? pl(plan, 'viaje planificado', 'viajes planificados') : ''].filter(Boolean);
+      return parts.length ? parts.join(' · ') : 'Ningún viaje todavía'; })()}</p></div><button class="btn" id="add">${icon('plus')}Viaje</button></div>
     ${!all.length ? `<div class="empty"><h3>Planifica tu primer viaje</h3><p>Marca la salida, las paradas y dónde duermes. Te calculo los kilómetros, el tiempo y lo que gastarás en gasóleo.</p><button class="btn" id="add2">${icon('plus')}Nuevo viaje</button></div>` : ''}
     ${up.length ? `<div class="gh"><span>Próximos y en curso</span><span>${up.length}</span></div><div class="list">${up.map(row).join('')}</div>` : ''}
     ${past.length ? `<div class="gh"><span>Hechos</span><span>${past.length}</span></div><div class="list">${past.map(row).join('')}</div>` : ''}
@@ -31,12 +33,7 @@ export function render(view, params) {
   view.querySelectorAll('[data-del]').forEach(b => (b.onclick = () => deleteTrip(D.trips.find(t => t.id === b.dataset.del))));
   if (params[0] === 'nuevo') { history.replaceState(history.state, '', '#/viajes'); tripMeta(); }
 }
-export const nightsOf = (t, today = isoToday()) => {
-  if (t.inicio && t.fin && t.fin > t.inicio) return daysBetween(t.inicio, t.fin);
-  const st = (t.paradas || []).filter(p => NIGHT.has(p.tipo)).length;
-  // Viaje abierto (sin fecha de vuelta): las noches que llevas fuera, o las planificadas si son más
-  return tripOpen(t, today) ? Math.max(daysBetween(t.inicio, today), st) : st;
-};
+export const nightsOf = (t, today = isoToday()) => tripNights(t, NIGHT, today);
 
 /* ---------- Datos generales del viaje ---------- */
 const metaF = t => [
@@ -251,12 +248,13 @@ export function renderTrip(view, [id]) {
 
   function totals() {
     const km = +t.kmRuta || 0, tc = tripCost(t, D, e100);
-    const fuelSub = tc.fuelUsed
-      ? (tc.kmReal ? `consumido en ${fKm(tc.km)}` : 'previsto para la ruta')
+    const fEst = tc.fuelUsed ?? tc.fuelPlan;
+    const fuelSub = fEst
+      ? (tc.fuelUsed ? (tc.kmReal ? `consumido en ${fKm(tc.km)}` : 'consumido en la ruta') : 'previsto para la ruta')
       : tc.fuelPaid ? 'pagado en ruta' : !tc.km ? 'añade paradas' : 'faltan dos llenos con km';
     $('#tot').innerHTML = `<div class="kpi"><span class="l">${icon('map')}Ruta</span><span class="v">${fKm(km)}</span><span class="s">${t.fuente === 'estimada' ? '≈ estimada sin conexión' : t.paradas.length > 1 ? 'por carretera' : 'añade paradas'}</span></div>
       <div class="kpi"><span class="l">${icon('clock')}Conducción</span><span class="v">${km ? fDur(t.durMin) : '—'}</span><span class="s">ritmo autocaravana ×${fNum(factor, 2)}</span></div>
-      <div class="kpi"><span class="l">${icon('fuel')}Gasóleo</span><span class="v">${tc.fuelUsed ? '≈ ' + fEur(tc.fuelUsed) : tc.fuelPaid ? fEur(tc.fuelPaid) : '—'}</span><span class="s">${fuelSub}</span></div>`;
+      <div class="kpi"><span class="l">${icon('fuel')}Gasóleo</span><span class="v">${fEst ? '≈ ' + fEur(fEst) : tc.fuelPaid ? fEur(tc.fuelPaid) : '—'}</span><span class="s">${fuelSub}</span></div>`;
     const h = +v.altura;
     $('#warn').innerHTML = t.paradas.length > 1 ? `<p class="fm warn" style="margin-top:12px">${icon('alert')} La ruta es la de un coche: no tiene en cuenta ${h ? `tu altura (${fNum(h, 2)} m)` : 'la altura'}, el peso ni calles estrechas. Revisa túneles, puertos y cascos urbanos antes de salir.</p>` : '';
   }
@@ -393,9 +391,10 @@ export function renderTrip(view, [id]) {
   const gl = () => {
     const g = D.expenses.filter(e => e.viajeId === t.id).sort((a, b) => a.fecha.localeCompare(b.fecha)), tc = tripCost(t, D, e100), n = nightsOf(t);
     const rowsHtml = g.map(e => `<div class="erow"><button class="row" data-e="${e.id}"><span class="m"><b>${esc(e.concepto || e.cat)}</b><small>${fDate(e.fecha, { day: 'numeric', month: 'short' })} · ${esc(e.cat)}</small></span><span class="r"><b>${fEur(e.importe)}</b></span></button><button class="ib" data-dx="${e.id}" aria-label="Borrar el gasto ${esc(e.concepto || e.cat)}" title="Borrar">${icon('trash')}</button></div>`).join('');
-    const sum = (tc.other || tc.fuelPaid || tc.fuelUsed) ? `<div class="row tot"><span class="m"><b>${tc.estimated ? 'Coste del viaje ≈' : 'Total pagado'}</b>
-        <small class="wrap">${tc.estimated ? `${fEur(tc.other)} en gastos + ${fEur(tc.fuelUsed)} de gasóleo consumido` : ''}${tc.perKm ? (tc.estimated ? ' · ' : '') + fNum(tc.perKm, 2) + ' €/km' : ''}${n && tc.total ? ' · ' + fEur(tc.total / n) + ' por noche' : ''}</small></span><span class="r"><b>${fEur(tc.total)}</b></span></div>` : '';
-    $('#gl').innerHTML = g.length || tc.fuelUsed ? `<div class="list">${rowsHtml}${sum}</div>${tc.estimated && tc.fuelPaid ? `<p class="hint" style="margin:8px 4px 0">Los repostajes de la lista son lo que pagaste en ruta. En el coste del viaje cuento el gasóleo que consumiste (sales y vuelves con combustible en el depósito).</p>` : ''}`
+    const per = [tc.perKm ? fNum(tc.perKm, 2) + ' €/km' : '', n && tc.total ? fEur(tc.total / n) + ' por noche' : ''].filter(Boolean).join(' · ');
+    const paidRow = g.length ? `<div class="row tot"><span class="m"><b>${tc.done ? 'Pagado en el viaje' : 'Llevas pagado'}</b><small class="wrap">${g.length === 1 ? 'Un gasto' : g.length + ' gastos'}${!tc.estimated && per ? ' · ' + per : ''}</small></span><span class="r"><b>${fEur(tc.paid)}</b></span></div>` : '';
+    const costRow = tc.estimated ? `<div class="row tot"><span class="m"><b>Coste real del viaje ≈</b><small class="wrap">${fEur(tc.other)} en gastos + ${fEur(tc.fuelUsed)} de gasóleo consumido${per ? ' · ' + per : ''}</small></span><span class="r"><b>${fEur(tc.total)}</b></span></div>` : '';
+    $('#gl').innerHTML = g.length || tc.estimated ? `<div class="list">${rowsHtml}${paidRow}${costRow}</div>${tc.estimated && Math.abs(tc.total - tc.paid) >= 0.5 ? `<p class="hint" style="margin:8px 4px 0">«Pagado» es la suma de la lista. En el coste real cuento el gasóleo que <b>gastaste</b> (${fKm(tc.km)}) en vez del que echaste en ruta: sales y vuelves con combustible en el depósito.</p>` : ''}`
       : `<div class="list"><div class="empty sm">Los gastos que asignes a este viaje aparecerán aquí.</div></div>`;
     $('#gl').querySelectorAll('[data-e]').forEach(b => (b.onclick = () => expenseSheet(D.expenses.find(x => x.id === b.dataset.e))));
     $('#gl').querySelectorAll('[data-dx]').forEach(b => (b.onclick = () => askDeleteExpense(D.expenses.find(x => x.id === b.dataset.dx), () => { if (alive) { gl(); totals(); } })));

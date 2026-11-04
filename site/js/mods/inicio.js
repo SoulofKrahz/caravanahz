@@ -68,7 +68,7 @@ export function render(view) {
   const simple = isSimple();
   const banners = `
   ${kmAsk && !kmJunto ? `<div class="banner"><span>${kmAsk.which === 'ini' ? `<b>¿Has salido hacia ${esc(kmAsk.t.nombre)}?</b> Apunta los km del cuentakilómetros para saber lo que recorres de verdad.` : `<b>¿Ya has vuelto de ${esc(kmAsk.t.nombre)}?</b> Apunta los km y el viaje queda cerrado.`}</span><button id="kma">Apuntar km</button></div>` : ''}
-  ${abierto ? `<div class="banner"><span><b>Estás de viaje: ${esc(abierto.nombre)}.</b> Desde el ${fDate(abierto.inicio, { day: 'numeric', month: 'long' })}${(n => n ? ` (llevas ${n} ${n === 1 ? 'noche' : 'noches'})` : '')(daysBetween(abierto.inicio, today))}. ${abierto.fin ? (abierto.fin === today ? ' Vuelves hoy.' : ` Vuelves el ${fDate(abierto.fin, { weekday: 'long', day: 'numeric', month: 'long' })}.`) : ''} ${kmJunto ? ' Apunta los km con los que saliste y, cuando vuelvas, toca «He vuelto».' : ' Cuando vuelvas, toca «He vuelto».'}</span>${kmJunto ? '<button id="kma">Km de salida</button>' : ''}<button id="hv">He vuelto</button></div>` : ''}
+  ${abierto ? `<div class="banner"><span><b>Estás de viaje: ${esc(abierto.nombre)}.</b>${(g => g ? ` Llevas <b>${fEur(g)}</b> gastados.` : '')(paidOf(abierto))} Desde el ${fDate(abierto.inicio, { day: 'numeric', month: 'long' })}${(n => n ? ` (llevas ${n} ${n === 1 ? 'noche' : 'noches'})` : '')(daysBetween(abierto.inicio, today))}. ${abierto.fin ? (abierto.fin === today ? ' Vuelves hoy.' : ` Vuelves el ${fDate(abierto.fin, { weekday: 'long', day: 'numeric', month: 'long' })}.`) : ''} ${kmJunto ? ' Apunta los km con los que saliste y, cuando vuelvas, toca «He vuelto».' : ' Cuando vuelvas, toca «He vuelto».'}</span>${kmJunto ? '<button id="kma">Km de salida</button>' : ''}<button id="hv">He vuelto</button></div>` : ''}
   ${needsProfilePlan() ? `<div class="banner"><span><b>Plan específico para tu Ducato 1.9 TD.</b> Sustituye los intervalos genéricos (aceite cada 10.000 km, distribución cada 60.000 km o 3 años, sellado de la capuchina…). Conserva lo que ya hayas apuntado.</span><button id="pp">Aplicar</button></div>` : ''}
   ${showInst ? `<div class="banner" id="ib"><span>${esc(bannerText())}</span>${canPrompt() ? '<button id="ig">Instalar</button>' : ''}<button id="iz">${canPrompt() ? 'Ahora no' : 'Entendido'}</button></div>` : ''}
   ${needBk ? `<div class="banner"><span>${lb ? `Hace ${Math.floor((Date.now() - lb) / 864e5)} días de tu última copia de seguridad.` : 'Aún no has hecho ninguna copia de seguridad.'} Tus datos solo están en este móvil: si se pierde o se rompe, se pierden.</span><button id="bk">Hacer copia</button><button id="bkz">Más tarde</button></div>` : ''}`;
@@ -162,13 +162,16 @@ export function render(view) {
   const bkz = view.querySelector('#bkz'); if (bkz) bkz.onclick = async () => { await setKV('bkSnooze', Date.now() + 14 * 864e5); render(view); };
 }
 
+/** Lo pagado en un viaje: la suma de sus gastos (igual que la lista del viaje) */
+const paidOf = t => D.expenses.filter(e => e.viajeId === t.id).reduce((a, e) => a + (+e.importe || 0), 0);
+
 function tripRow(t, tag) {
-  const n = nightsOf(t), today = isoToday(), short = { weekday: 'short', day: 'numeric', month: 'short' };
+  const n = nightsOf(t), today = isoToday(), short = { weekday: 'short', day: 'numeric', month: 'short' }, g = paidOf(t);
   const d = !t.inicio ? 'Sin fecha'
     : t.inicio > today ? `sales ${rel(t.inicio)} (${fDate(t.inicio, short)})`
     : tag === 'En curso' ? (t.fin ? (t.fin === today ? 'vuelves hoy' : `vuelves ${rel(t.fin)}`) : `desde el ${fDate(t.inicio, { day: 'numeric', month: 'short' })}, sin fecha de vuelta`)
     : fDate(t.inicio);
-  return `<a class="row" href="#/viaje/${t.id}"><span class="ico">${icon('map')}</span><span class="m"><b>${esc(t.nombre)}</b><small>${tag} · ${esc(d)}${+t.kmRuta ? ' · ' + fKm(t.kmRuta) : ''}${n ? ' · ' + n + (n === 1 ? ' noche' : ' noches') : ''}</small></span>${icon('right')}</a>`;
+  return `<a class="row" href="#/viaje/${t.id}"><span class="ico">${icon('map')}</span><span class="m"><b>${esc(t.nombre)}</b><small>${tag} · ${esc(d)}${+t.kmRuta ? ' · ' + fKm(t.kmRuta) : ''}${n ? ' · ' + n + (n === 1 ? ' noche' : ' noches') : ''}</small></span>${g ? `<span class="r"><b>${fEur(g)}</b><small>${tag === 'Último' ? 'pagado' : tag === 'En curso' ? 'llevas' : 'ya pagado'}</small></span>` : icon('right')}</a>`;
 }
 
 function welcome(view) {

@@ -4,7 +4,7 @@ import { esc, icon, fKm, fDate, fEur, fEur0, fNum, fPpl, isSimple, uL100 } from 
 import { ctx, tasksWithStatus, NIGHT, ZONA_ICO } from '../store.js';
 import {
   isoToday, addMonths, kmBetween, consumption, fuelStats, tripCost, eur100Of,
-  GRUPOS, monthsBetween, tripDone, costBreakdown, series, nightsIn, maintForecast, delta,
+  GRUPOS, monthsBetween, tripDone, tripNights, costBreakdown, series, nightsIn, maintForecast, delta,
 } from '../logic.js';
 
 let periodo = 'anio', year = String(new Date().getFullYear());
@@ -69,7 +69,9 @@ export function render(view) {
   const cb = costBreakdown(D.expenses, r.from, r.to);
   const km = kmBetween(D, r.from, r.to) || 0, months = monthsIn(r.from, r.to);
   const nights = nightsIn(D.trips, r.from, r.to, NIGHT);
-  const tripsIn = D.trips.filter(t => t.inicio && t.inicio >= r.from && t.inicio <= r.to && tripDone(t, today));
+  // Viajes del periodo: los hechos y el que esté en curso (sus gastos ya cuentan en el total)
+  const tripsIn = D.trips.filter(t => t.inicio && t.inicio >= r.from && t.inicio <= r.to && t.inicio <= today);
+  const enCurso = tripsIn.filter(t => !tripDone(t, today)).length;
   const e100all = eur100Of(D.expenses);
 
   // Serie temporal: por mes (hasta 24 meses) o por año
@@ -109,7 +111,7 @@ export function render(view) {
 
   // Viajes del periodo
   const tripRows = tripsIn.sort((a, b) => b.inicio.localeCompare(a.inicio)).map(t => {
-    const tc = tripCost(t, D, e100all), n = t.fin && t.fin > t.inicio ? Math.round((new Date(t.fin) - new Date(t.inicio)) / 864e5) : (t.paradas || []).filter(p => NIGHT.has(p.tipo)).length;
+    const tc = tripCost(t, D, e100all, today), n = tripNights(t, NIGHT, today);
     return { t, tc, n };
   });
   const pern = { area: 0, camping: 0, libre: 0 };
@@ -127,7 +129,7 @@ export function render(view) {
       <div class="kpi"><span class="l">${icon('cal')}Al mes</span><span class="v">${fEur0(cb.total / months)}</span><span class="s">de media</span></div>
       <div class="kpi"><span class="l">${icon('gauge')}Kilómetros</span><span class="v">${fKm(km)}</span><span class="s">${km ? fNum(km / months, 0) + ' km/mes' : 'apunta km o repostajes'}</span></div>
       <div class="kpi"><span class="l">${icon('moon-bed')}Noches fuera</span><span class="v">${fNum(nights, 0)}</span><span class="s">${nights && cb.total ? fEur0(cb.total / nights) + ' por noche' : pl(tripsIn.length, 'viaje', 'viajes')}</span></div>
-      <div class="kpi"><span class="l">${icon('map')}Viajes</span><span class="v">${fNum(tripsIn.length, 0)}</span><span class="s">${tripsIn.length ? fKm(tripRows.reduce((a, x) => a + x.tc.km, 0)) + ' en viajes' : 'hechos en el periodo'}</span></div>
+      <div class="kpi"><span class="l">${icon('map')}Viajes</span><span class="v">${fNum(tripsIn.length, 0)}</span><span class="s">${tripsIn.length ? (enCurso ? `${enCurso === 1 ? 'uno' : enCurso} en curso` : fKm(tripRows.reduce((a, x) => a + x.tc.km, 0)) + ' en viajes') : 'en el periodo'}</span></div>
     </div>
 
     <div class="grid2">
@@ -159,11 +161,11 @@ export function render(view) {
           <p class="hint" style="margin-top:8px">${fc.items.length > 6 ? `Y ${fc.items.length - 6} más. ` : ''}${fc.known ? `Con lo que pagaste la última vez: <b>≈ ${fEur0(fc.known)}</b>` : 'Aún no hay costes previos para estimar'}${fc.unknown ? `, más ${pl(fc.unknown, 'tarea', 'tareas')} sin coste conocido` : ''}. Es una referencia, no un presupuesto.</p>`
           : '<p class="hint">Nada vence en los próximos 12 meses.</p>'}`)}
       ${card('Viajes', tripRows.length ? `<div class="tw"><table><thead><tr><th>Viaje</th><th>Km</th><th>Noches</th><th>Coste ≈</th><th>€/noche</th></tr></thead><tbody>
-          ${tripRows.map(({ t, tc, n }) => `<tr><td><a href="#/viaje/${t.id}">${esc(t.nombre)}</a><small>${fDate(t.inicio, { month: 'short', year: 'numeric' })}</small></td><td class="n">${fNum(tc.km, 0)}${tc.kmReal ? '' : '*'}</td><td class="n">${n || '—'}</td><td class="n">${tc.total ? fEur0(tc.total) : '—'}</td><td class="n">${n && tc.total ? fEur0(tc.total / n) : '—'}</td></tr>`).join('')}
+          ${tripRows.map(({ t, tc, n }) => `<tr><td><a href="#/viaje/${t.id}">${esc(t.nombre)}</a><small>${tc.done ? fDate(t.inicio, { month: 'short', year: 'numeric' }) : 'en curso'}</small></td><td class="n">${tc.done ? fNum(tc.km, 0) + (tc.kmReal ? '' : '*') : '—'}</td><td class="n">${n || '—'}</td><td class="n">${tc.total ? fEur0(tc.total) : '—'}</td><td class="n">${n && tc.total ? fEur0(tc.total / n) : '—'}</td></tr>`).join('')}
           </tbody></table></div>
-          <p class="hint" style="margin-top:8px">Coste ≈ = gastos del viaje + gasóleo consumido según tus km y tu coste cada 100 km.${tripRows.some(x => !x.tc.kmReal) ? ' * km de la ruta planificada (no apuntaste los reales).' : ''}</p>
+          <p class="hint" style="margin-top:8px">Coste ≈ = gastos del viaje + gasóleo consumido según tus km y tu coste cada 100 km.${enCurso ? ' En un viaje en curso, lo pagado hasta hoy.' : ''}${tripRows.some(x => x.tc.done && !x.tc.kmReal) ? ' * km de la ruta planificada (no apuntaste los reales).' : ''}</p>
           ${pernTot ? `<p class="sub">Dónde duermes (pernoctas marcadas en las paradas)</p><div class="hbars">${[['area', 'Área AC'], ['camping', 'Camping'], ['libre', 'Libre']].map(([k, l]) => `<div class="hb"><b>${l}</b><span>${pern[k]} · ${Math.round(pern[k] / pernTot * 100)} %</span><div class="t"><i style="width:${pern[k] / Math.max(pern.area, pern.camping, pern.libre) * 100}%"></i></div></div>`).join('')}</div>` : ''}`
-        : `<p class="hint">No hay viajes terminados ${esc(r.txt)}.</p>`)}
+        : `<p class="hint">No hay viajes ${esc(r.txt)}.</p>`)}
     </div>
     ${cmp}`}
     <div class="pb"></div>`;

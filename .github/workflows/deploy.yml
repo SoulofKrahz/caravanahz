@@ -18,7 +18,7 @@ jobs:
   test:
     name: Prueba de humo
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -40,6 +40,9 @@ jobs:
       - name: Probar la app (móvil y PC)
         timeout-minutes: 8
         run: node tests/smoke.cjs
+      - name: Coherencia de los gastos (un viaje completo; todas las pantallas suman lo mismo)
+        timeout-minutes: 8
+        run: node tests/gastos.cjs
   deploy:
     name: Publicar
     needs: test
