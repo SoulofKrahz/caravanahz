@@ -587,3 +587,10 @@ html.simple .catp button{min-height:54px;font-size:calc(15.5px*var(--fs,1))}
 .erow>.row{border-top:0;flex:1;min-width:0}
 .erow>.ib{margin-right:8px;width:44px;height:44px}
 .erow>.ib:active{color:var(--bad)}
+/* Buscador de direcciones: aviso de resultado aproximado y textos que no se cortan */
+.sugg .sg-n{display:flex;gap:8px;align-items:flex-start;margin:0;padding:10px 14px;background:var(--tint);color:var(--tx);font-size:calc(13px*var(--fs,1));line-height:1.35}
+.sugg .sg-n svg{width:16px;height:16px;flex:none;margin-top:1px;color:var(--warn,#b45309)}
+.sugg button{line-height:1.3}
+.sugg button[disabled]{white-space:normal;color:var(--mu);line-height:1.4}
+.sugg small{white-space:normal}
+html.simple .sugg{max-height:min(60vh,420px)}

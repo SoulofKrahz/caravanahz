@@ -43,6 +43,9 @@ jobs:
       - name: Coherencia de los gastos (un viaje completo; todas las pantallas suman lo mismo)
         timeout-minutes: 8
         run: node tests/gastos.cjs
+      - name: Buscador de direcciones (servicios simulados)
+        timeout-minutes: 4
+        run: node tests/busqueda.cjs
   deploy:
     name: Publicar
     needs: test

@@ -6,6 +6,7 @@ import { STOP_TIPOS, NIGHT, prefs, vehicle } from '../store.js';
 import { isoToday, haversine, consumption, lastFuelPrice, daysBetween, addMonths, currentKm, tripCost, eur100Of, tripDone, tripOpen, tripNights } from '../logic.js';
 import { expenseSheet, kmMsg, removeExpenses, askDeleteExpense } from '../forms.js';
 import { go, refresh } from '../router.js';
+import { search as geoSearch, reverse, parseCoords, timeout } from '../geo.js';
 
 /* ---------- Lista ---------- */
 export function render(view, params) {
@@ -189,25 +190,7 @@ async function routeOf(stops, factor) {
   } catch (e) { return straight(); }
 }
 
-/* ---------- Búsqueda de direcciones (Nominatim, OpenStreetMap) ---------- */
-// Con cobertura mala nada se queda esperando para siempre: cada petición tiene un tiempo máximo
-function timeout(ms, parent) {
-  const c = new AbortController(), t = setTimeout(() => c.abort(), ms);
-  if (parent) parent.addEventListener('abort', () => { clearTimeout(t); c.abort(); });
-  return c.signal;
-}
-async function geocode(q, signal) {
-  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=es&q=${encodeURIComponent(q)}`, { signal: timeout(10000, signal) });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  return (await r.json()).map(x => ({ lat: +x.lat, lon: +x.lon, label: x.display_name.split(',').slice(0, 2).join(',').trim(), full: x.display_name }));
-}
-async function reverse(lat, lon) {
-  try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&accept-language=es&lat=${lat}&lon=${lon}`, { signal: timeout(10000) });
-    const j = await r.json(); const a = j.address || {};
-    return a.village || a.town || a.city || a.hamlet || a.municipality || (j.display_name || '').split(',')[0] || null;
-  } catch (e) { return null; }
-}
+/* La búsqueda de direcciones está en ../geo.js (dos buscadores, limpieza de lo escrito y planes de respaldo) */
 
 /* ---------- Editor de viaje ---------- */
 export function renderTrip(view, [id]) {
@@ -229,7 +212,7 @@ export function renderTrip(view, [id]) {
       </div>
       <div>
         <div class="sec"><h2>Paradas</h2>
-          <div class="srch" style="margin-bottom:10px">${icon('pin')}<input id="q" type="search" placeholder="Buscar pueblo, área, camping…" autocomplete="off" aria-label="Buscar lugar"><div class="sugg" id="sg" hidden></div></div>
+          <div class="srch" style="margin-bottom:10px">${icon('pin')}<input id="q" type="search" placeholder="Dirección, pueblo, área o camping…" enterkeyhint="search" autocomplete="off" aria-label="Buscar lugar"><div class="sugg" id="sg" hidden></div></div>
           <div id="pl"></div>
           <div class="list" id="st"></div>
           <div class="brow" style="margin-top:10px"><button class="btn g sm" id="gps">${icon('gps')}Mi ubicación</button><button class="btn g sm" id="gm">${icon('ext')}Google Maps</button><button class="btn g sm" id="shr">${icon('share')}Compartir</button></div>
@@ -340,28 +323,33 @@ export function renderTrip(view, [id]) {
   });
   $('#pl').addEventListener('click', e => { const c = e.target.closest('[data-p]'); if (!c) return; const p = D.places.find(x => x.id === c.dataset.p); addStop(p.lat, p.lon, p.label, p.tipo); if (map) map.panTo([p.lat, p.lon]); });
 
-  // Búsqueda con espera para no saturar el servicio (máx. 1 petición por segundo)
+  // Búsqueda: espera a que dejes de escribir (o busca al momento con Intro / la lupa del teclado)
   let qt, qa;
   const q = $('#q'), sg = $('#sg');
-  q.addEventListener('input', () => {
+  const HOW = { street: 'No encuentro ese número: te enseño la calle.', structured: 'No encuentro ese número: te enseño la calle.', town: 'No encuentro esa dirección: te enseño el pueblo. Busca la calle en el mapa y tócala.' };
+  const near = () => { if (map) { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; } const l = t.paradas[t.paradas.length - 1]; return l ? { lat: l.lat, lon: l.lon } : null; };
+  const runSearch = async () => {
     clearTimeout(qt); if (qa) qa.abort();
     const v = q.value.trim(); if (v.length < 3) { sg.hidden = true; return; }
-    qt = setTimeout(async () => {
-      if (!navigator.onLine) { sg.innerHTML = '<button disabled>Sin conexión: toca el mapa</button>'; sg.hidden = false; return; }
-      const my = qa = new AbortController();
-      sg.innerHTML = '<button disabled>Buscando…</button>'; sg.hidden = false;
-      try {
-        const res = await geocode(v, my.signal);
-        if (my !== qa || my.signal.aborted) return;
-        sg.innerHTML = res.length ? res.map((r, i) => `<button data-r="${i}">${esc(r.label)}<small>${esc(r.full)}</small></button>`).join('') : '<button disabled>Sin resultados. Prueba con el nombre del pueblo.</button>';
-        sg.hidden = false;
-        sg.querySelectorAll('[data-r]').forEach(b => (b.onclick = () => { const r = res[+b.dataset.r]; addStop(r.lat, r.lon, r.label); q.value = ''; sg.hidden = true; if (map) map.setView([r.lat, r.lon], Math.max(map.getZoom(), 9)); }));
-      } catch (e) {
-        if (my !== qa || my.signal.aborted && q.value.trim() !== v) return; // la ha sustituido otra búsqueda
-        sg.innerHTML = `<button disabled>${e.name === 'AbortError' ? 'La conexión va muy lenta. Prueba otra vez o toca el mapa.' : 'No se pudo buscar ahora. Toca el mapa para marcar el sitio.'}</button>`; sg.hidden = false;
-      }
-    }, 700);
-  });
+    if (!navigator.onLine && !parseCoords(v)) { sg.innerHTML = '<button disabled>Sin conexión: toca el mapa para marcar el sitio</button>'; sg.hidden = false; return; }
+    const my = qa = new AbortController();
+    sg.innerHTML = '<button disabled>Buscando…</button>'; sg.hidden = false;
+    try {
+      const { results: res, approx, how } = await geoSearch(v, { near: near(), signal: my.signal });
+      if (my !== qa || my.signal.aborted) return;
+      sg.innerHTML = res.length
+        ? (approx ? `<p class="sg-n">${icon('alert')}${HOW[how] || 'Resultado aproximado.'}</p>` : '') + res.map((r, i) => `<button data-r="${i}">${esc(r.label)}${r.full && r.full !== r.label ? `<small>${esc(r.full)}</small>` : ''}</button>`).join('')
+        : `<button disabled>No encuentro «${esc(v)}». Prueba solo con la calle y el pueblo (sin número), o con el nombre del sitio, p. ej. «área autocaravanas Llanes». También puedes tocar el mapa.</button>`;
+      sg.hidden = false;
+      sg.querySelectorAll('[data-r]').forEach(b => (b.onclick = () => { const r = res[+b.dataset.r]; addStop(r.lat, r.lon, r.label); q.value = ''; sg.hidden = true; if (map) map.setView([r.lat, r.lon], Math.max(map.getZoom(), approx && how === 'town' ? 13 : 15)); }));
+    } catch (e) {
+      if (my !== qa || (my.signal.aborted && q.value.trim() !== v)) return; // la ha sustituido otra búsqueda
+      sg.innerHTML = `<button disabled>${e.name === 'AbortError' ? 'La conexión va muy lenta. Prueba otra vez o toca el mapa.' : 'No se pudo buscar ahora. Toca el mapa para marcar el sitio.'}</button>`; sg.hidden = false;
+    }
+  };
+  q.addEventListener('input', () => { clearTimeout(qt); if (qa) qa.abort(); if (q.value.trim().length < 3) { sg.hidden = true; return; } qt = setTimeout(runSearch, 650); });
+  q.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } });
+  q.addEventListener('search', runSearch);
   const outside = e => { if (!e.target.closest('.srch')) sg.hidden = true; };
   document.addEventListener('click', outside);
 
