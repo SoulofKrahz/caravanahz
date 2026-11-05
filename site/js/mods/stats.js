@@ -181,7 +181,6 @@ export function render(view) {
     ${cmp}`}
     <div class="pb"></div>`;
 
-  window.__czFromStats = true;
   view.querySelector('#per').onclick = e => { const b = e.target.closest('[data-v]'); if (b) { periodo = b.dataset.v; render(view); } };
   const yr = view.querySelector('#yr'); if (yr) yr.onchange = e => { year = e.target.value; render(view); };
 }

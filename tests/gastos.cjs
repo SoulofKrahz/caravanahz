@@ -200,7 +200,7 @@ async function run(browser, label, viewport, mobile, simple) {
     await p.evaluate(() => history.back()); await W(500);
     ok(p.url().endsWith('#/stats') && (await txt('.legv a.tap:has-text("Uso")')).includes(E0(uso)), 'Atrás vuelve al Resumen, ya actualizado');
     await p.click('#view .legv a.tap:has-text("Uso")'); await W(400);
-    await p.click('#view [data-back]'); await W(400);
+    await p.click('#view a.back'); await W(400);
     ok(p.url().endsWith('#/stats'), '«Volver» también vuelve al Resumen');
     // devolver el peaje a 23,40 para que el resto de la prueba siga igual
     await go('#/gastos/gastos'); await p.click('#view .erow:has-text("AP-66") [data-e]'); await sheetOpen(); await p.fill('.sheet [name=importe]', '23,40'); await save();

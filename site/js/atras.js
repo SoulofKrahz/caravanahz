@@ -42,7 +42,16 @@ export function initBack() {
   else if (st().sheet) history.replaceState({ cz: 'page' }, '', location.hash); // hoja que quedó abierta antes de recargar
 }
 
-onRender(name => (route = name));
+// Pantalla anterior (para que los botones «volver» funcionen como Atrás)
+let lastHash = location.hash, prevHash = '';
+onRender(name => { route = name; if (location.hash !== lastHash) { prevHash = lastHash; lastHash = location.hash; } });
+
+/** Botón «volver» de una pantalla: si vuelves a la de la que vienes, es Atrás (sin dejar pantallas repetidas);
+ *  si no (llegaste de otro sitio), sustituye esta pantalla por aquella */
+export function goBackTo(hash) {
+  if (prevHash === hash && st().cz !== 'root') history.back();
+  else { history.replaceState(st(), '', hash); refresh(); }
+}
 
 addEventListener('popstate', () => {
   const from = prev; prev = st();

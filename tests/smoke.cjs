@@ -365,6 +365,12 @@ async function run(browser, label, viewport, mobile) {
     await q.click('#view .trow a >> nth=0'); await q.waitForTimeout(700);
     ok((await at()).startsWith('#/viaje/'), 'Atrás: abierto un viaje desde Viajes');
     await back(); ok(await at() === '#/viajes', 'Atrás desde un viaje vuelve a la lista de Viajes');
+    // El botón «‹ Viajes» de dentro del viaje hace lo mismo que Atrás (no deja el viaje detrás)
+    await q.click('#view .trow a >> nth=0'); await q.waitForTimeout(700);
+    const bk = await q.locator('#view a.back').boundingBox();
+    ok(bk && bk.height >= 44, 'el botón «volver» es grande (' + (bk ? Math.round(bk.height) : 0) + ' px de alto)');
+    await q.click('#view a.back'); await q.waitForTimeout(450);
+    ok(await at() === '#/viajes', '«‹ Viajes» vuelve a la lista (y Atrás, a continuación, va a Inicio: no al viaje)');
     await back(); ok(await at() === '#/inicio', 'Atrás desde Viajes va a Inicio (no recorre Gastos)');
     await back();
     ok(await at() === '#/inicio' && (await q.innerText('#toast')).includes('Pulsa atrás otra vez para salir'), 'Atrás en Inicio: «Pulsa atrás otra vez para salir» y sigue en la app');

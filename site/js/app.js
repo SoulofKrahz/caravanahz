@@ -12,7 +12,7 @@ import * as ajustes from './mods/ajustes.js';
 import * as stats from './mods/stats.js';
 import * as apuntes from './mods/apuntes.js';
 import { quickAdd } from './forms.js';
-import { initBack, goMain } from './atras.js';
+import { initBack, goMain, goBackTo } from './atras.js';
 
 route('inicio', inicio.render);
 route('mant', mant.render);
@@ -44,6 +44,9 @@ onRender(nav);
 $('#fab').onclick = quickAdd;
 // Pantallas principales: no se apilan en el historial (ver atras.js)
 document.addEventListener('click', e => {
+  // Botones «volver» de las pantallas de detalle
+  const bk = e.target.closest('a.back, a.back-to');
+  if (bk && !e.ctrlKey && !e.metaKey) { e.preventDefault(); goBackTo(bk.getAttribute('href')); return; }
   const a = e.target.closest('#bb a, #topnav a, #cfg'); if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
   e.preventDefault(); goMain(a.getAttribute('href').replace(/^#\//, ''));
 });

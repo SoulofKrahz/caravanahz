@@ -9,7 +9,7 @@
 //   z      zona de mantenimiento (con k=revis)
 //   tit    título; sub: periodo en palabras
 import { D } from '../db.js';
-import { esc, icon, fKm, fDate, fEur, fMonth } from '../ui.js';
+import { esc, icon, fKm, fDate, fEur, fMonth, isSimple } from '../ui.js';
 import { ZONA_ICO } from '../store.js';
 import { expenseSheet, serviceSheet, askDeleteExpense } from '../forms.js';
 import { refresh } from '../router.js';
@@ -44,8 +44,7 @@ export function render(view, params = []) {
 
   const rowS = s => `<button class="row" data-s="${s.id}"><span class="ico">${icon(ZONA_ICO[s.zona] || 'wrench')}</span><span class="m"><b>${esc(s.nombre)}</b><small>${esc([fDate(s.fecha, { day: 'numeric', month: 'short' }), s.km ? fKm(s.km) : '', s.taller || '', s.gastoId ? '' : 'sin gasto apuntado'].filter(Boolean).join(' · '))}</small></span><span class="r"><b>${fEur(s.coste)}</b></span></button>`;
 
-  view.innerHTML = `<a class="back" href="#/stats" data-back>${icon('left')}Volver</a>
-    <div class="vh"><div><h1>${esc(title)}</h1><p>${esc(sub)}</p></div></div>
+  view.innerHTML = `<div class="vh"><div><a class="back" href="#/stats" aria-label="Volver al resumen">${icon('left')}${isSimple() ? 'Resumen' : 'Estadísticas'}</a><h1>${esc(title)}</h1><p>${esc(sub)}</p></div></div>
     <div class="kpis k2">
       <div class="kpi"><span class="l">${icon('euro')}Total</span><span class="v">${fEur(total)}</span><span class="s">${pl(items.length, kind === 'revis' ? 'registro' : 'apunte', kind === 'revis' ? 'registros' : 'apuntes')}</span></div>
       <div class="kpi"><span class="l">${icon('cal')}Periodo</span><span class="v sm">${from > '0001' ? fDate(from, { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</span><span class="s">al ${fDate(to > '9000' ? new Date().toISOString().slice(0, 10) : to, { day: 'numeric', month: 'short', year: 'numeric' })}</span></div>
@@ -54,11 +53,10 @@ export function render(view, params = []) {
     ${kind === 'revis' ? `<p class="hint" style="margin:12px 4px 0">Mantenimientos con coste. Tócalo para ver o corregir el registro${items.some(s => !s.gastoId) ? '; los marcados «sin gasto apuntado» no suman en Gastos' : ''}.</p>` : `<p class="hint" style="margin:12px 4px 0">Toca un apunte para verlo o corregirlo. La papelera lo borra.</p>`}
     ${items.length ? Object.keys(groups).sort().reverse().map(m => `<div class="gh" data-m="${m}"><span>${fMonth(m + '-01')}</span><span>${fEur(groups[m].reduce((a, x) => a + val(x), 0))}</span></div>
       <div class="list" data-m="${m}">${groups[m].map(kind === 'revis' ? rowS : rowE).join('')}</div>`).join('')
-      : `<div class="empty"><h3>No hay apuntes</h3><p>Ya no queda ninguno con este filtro.</p><a class="btn g" href="#/stats" data-back>Volver al resumen</a></div>`}
+      : `<div class="empty"><h3>No hay apuntes</h3><p>Ya no queda ninguno con este filtro.</p><a class="btn g back-to" href="#/stats">Volver al resumen</a></div>`}
     <div class="pb"></div>`;
 
-  // Volver: si vienes del Resumen, como el botón Atrás (el Resumen queda como estaba); si no (p. ej. tras recargar), al Resumen
-  view.querySelectorAll('[data-back]').forEach(a => (a.onclick = e => { e.preventDefault(); if (window.__czFromStats) history.back(); else location.hash = '#/stats'; }));
+  // «Volver» lo gestiona app.js (como el botón Atrás si vuelves a la pantalla de la que vienes)
   view.querySelectorAll('[data-e]').forEach(b => (b.onclick = () => expenseSheet(D.expenses.find(x => x.id === b.dataset.e))));
   view.querySelectorAll('[data-dx]').forEach(b => (b.onclick = () => askDeleteExpense(D.expenses.find(x => x.id === b.dataset.dx), refresh)));
   view.querySelectorAll('[data-s]').forEach(b => (b.onclick = () => { const s = D.services.find(x => x.id === b.dataset.s); serviceSheet(s.tareaId ? D.tasks.find(t => t.id === s.tareaId) || null : null, s); }));

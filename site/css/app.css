@@ -48,7 +48,11 @@ svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .vh{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:22px 0 14px}
 .vh h1{font:600 calc(30px*var(--fs,1))/1.1 Newsreader,Georgia,serif;letter-spacing:-.02em}
 .vh p{color:var(--mu);font-size:calc(13.5px*var(--fs,1));margin-top:4px}
-.vh .back{display:inline-flex;align-items:center;gap:4px;color:var(--mu);font-size:calc(13px*var(--fs,1));font-weight:600;text-decoration:none;margin-bottom:6px}
+/* Botón «volver» (arriba a la izquierda): grande, con borde y diciendo adónde vuelve */
+.back{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:6px 16px 6px 10px;margin:0 0 12px;border:1px solid var(--bd);border-radius:999px;background:var(--card);color:var(--tx);font-size:calc(15px*var(--fs,1));font-weight:600;line-height:1.2;text-decoration:none;box-shadow:var(--sh);-webkit-tap-highlight-color:transparent}
+.back svg{width:20px;height:20px;color:var(--em);flex:none}
+html.simple .back{min-height:50px;font-size:calc(16.5px*var(--fs,1));padding:8px 18px 8px 12px}
+.back:active{background:var(--tint)}
 
 
 /* Botones */
@@ -504,7 +508,7 @@ html.simple .row .m b{white-space:normal;overflow:visible}
 @media(hover:hover){
 .topnav a:hover{color:var(--tx);background:color-mix(in srgb,var(--tx) 5%,transparent)}
 .ib:hover{color:var(--em);background:var(--tint)}
-.vh .back:hover{color:var(--em)}
+.back:hover{border-color:var(--em);color:var(--em)}
 .btn:hover{filter:brightness(1.06)}
 .tb:hover{color:var(--em);background:var(--tint)}
 button.kpi:hover{border-color:var(--em2)}
