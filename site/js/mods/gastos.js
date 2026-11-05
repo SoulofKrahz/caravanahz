@@ -62,7 +62,7 @@ function gastos(el) {
   el.querySelectorAll('[data-dx]').forEach(b => (b.onclick = () => askDeleteExpense(D.expenses.find(x => x.id === b.dataset.dx), refresh)));
 }
 
-function rowE(e) {
+export function rowE(e) {
   const trip = e.viajeId && D.trips.find(t => t.id === e.viajeId);
   const sub = [fDate(e.fecha, { day: 'numeric', month: 'short' }), e.cat === 'Combustible' && e.litros ? `${fNum(e.litros)} L · ${fPpl(e.importe / e.litros)} €/L${e.lleno ? ' · lleno' : ''}` : e.cat, e.km ? fKm(e.km) : '', trip ? trip.nombre : ''].filter(Boolean).join(' · ');
   const q = normKey([e.concepto, e.cat, e.notas, trip && trip.nombre, String(e.importe).replace('.', ',')].filter(Boolean).join(' '));

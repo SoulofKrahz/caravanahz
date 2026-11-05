@@ -21,6 +21,7 @@ async function run(browser, label, viewport, mobile, simple) {
   console.log(`\n== ${label}`); where = label + ': ';
   const ctx = await browser.newContext({ viewport, isMobile: mobile, hasTouch: mobile, serviceWorkers: 'block', locale: 'es-ES', acceptDownloads: true });
   const p = await ctx.newPage(), errs = [];
+  p.setDefaultTimeout(8000);
   p.on('pageerror', e => errs.push(e.message));
   await ctx.route('**/*', r => {
     const u = r.request().url();
@@ -98,12 +99,12 @@ async function run(browser, label, viewport, mobile, simple) {
     if (!kS.includes(E0(tot))) bad.push(`Estadísticas: coste total ${kS.split('\n')[1]} ≠ ${E0(tot)}`);
     for (const [g, cats] of Object.entries(G)) {
       const v = sum(inY.filter(e => cats.includes(e.cat)));
-      const row = await txt(`.legv > div:has-text("${g}")`).catch(() => '');
+      const row = await txt(`.legv > :has-text("${g}")`).catch(() => '');
       if (!row.includes(E0(v))) bad.push(`Estadísticas: grupo ${g} «${row.replace(/\n/g, ' ')}» ≠ ${E0(v)}`);
     }
     const stRows = {};
     for (const t of d.trips) stRows[t.id] = await txt(`.scard:has(h2:text-is("Viajes")) tr:has-text("${t.nombre}")`).catch(() => '');
-    const gas = await txt('.scard:has(h2:text-is("Gasóleo")) .mini > div >> nth=0').catch(() => '');
+    const gas = await txt('.scard:has(h2:text-is("Gasóleo")) .mini > :nth-child(1)').catch(() => '');
     if (!gas.includes(E0(fuelY))) bad.push(`Estadísticas: gasóleo gastado «${gas.replace(/\n/g, ' ')}» ≠ ${E0(fuelY)}`);
     // Cada viaje: su pantalla (lista y total pagado), la lista de viajes y la tabla de Estadísticas
     for (const t of d.trips) {
@@ -163,6 +164,53 @@ async function run(browser, label, viewport, mobile, simple) {
   ok(sv && sv.viajeId === tid, 'revisión hecha durante el viaje: su gasto cuenta en el viaje');
   await check('durante el viaje');
   await shot('#/inicio', 'v1_inicio'); await shot('#/viaje/' + tid, 'v2_viaje', '#gl'); await shot('#/viajes', 'v3_lista');
+
+  // ---------- Del Resumen a la lista de apuntes (cada cifra tocable) ----------
+  {
+    await go('#/stats');
+    const links = await p.$$eval('#view a[href^="#/apuntes/"]', as => as.map(a => ({ href: a.getAttribute('href'), txt: a.innerText.replace(/[  ]/g, ' ') })));
+    ok(links.length >= 8, `el Resumen tiene ${links.length} cifras que llevan a sus apuntes (total, por km, al mes, grupos, categorías, meses, gasóleo, zonas)`);
+    const bad = [], seen = new Set();
+    for (const l of links) {
+      if (seen.has(l.href)) continue; seen.add(l.href);
+      const q = new URLSearchParams(decodeURIComponent(l.href.split('/apuntes/')[1]));
+      const d = await D(), f = q.get('f'), t = q.get('t'), cats = (q.get('c') || '').split('|').filter(Boolean);
+      const exp = q.get('k') === 'revis'
+        ? d.services.filter(x => x.fecha >= f && x.fecha <= t && +x.coste > 0 && (x.zona || 'Otros') === q.get('z')).reduce((a, x) => a + +x.coste, 0)
+        : sum(d.expenses.filter(e => e.fecha >= f && e.fecha <= t && (!cats.length || cats.includes(e.cat))));
+      const n = q.get('k') === 'revis' ? d.services.filter(x => x.fecha >= f && x.fecha <= t && +x.coste > 0 && (x.zona || 'Otros') === q.get('z')).length : d.expenses.filter(e => e.fecha >= f && e.fecha <= t && (!cats.length || cats.includes(e.cat))).length;
+      await p.goto(BASE + l.href); await W(350);
+      const tot = await txt('.kpis .kpi >> nth=0'), rows = await p.locator('#view .list > .erow, #view .list > [data-s]').count();
+      // la cifra del Resumen (redondeada al euro) es la de la lista
+      const shownInStats = (l.txt.match(/[\d.]+(,\d+)?\s*€/) || [''])[0];
+      if (!tot.includes(E2(exp)) || rows !== n) bad.push(`«${q.get('tit')}»: lista ${tot.split('\n')[1]} en ${rows} filas; esperaba ${E2(exp)} en ${n}`);
+      else if (shownInStats && !/^(Por kil|Al mes)/.test(l.txt) && !l.txt.includes(E0(exp)) && !/\d{4}$/.test(q.get('tit') || '')) bad.push(`«${q.get('tit')}»: el Resumen dice ${shownInStats} y la lista ${E2(exp)}`);
+    }
+    ok(!bad.length, `cada lista suma lo mismo que su cifra del Resumen (${seen.size} listas)` + (bad.length ? '\n      - ' + bad.join('\n      - ') : ''));
+    // Tocar un apunte abre su ficha; corregirlo cambia la lista y el Resumen; Atrás vuelve al Resumen
+    await go('#/stats');
+    await p.click('#view .legv a.tap:has-text("Uso")'); await W(400);
+    ok(p.url().includes('#/apuntes/') && (await txt('#view h1')) === 'Uso', 'tocar «Uso» en el Resumen abre su lista de apuntes');
+    if (process.env.SHOTS && simple) { await p.screenshot({ path: path.join(process.env.SHOTS, 'ap_lista.png') }); await go('#/stats'); await p.screenshot({ path: path.join(process.env.SHOTS, 'ap_resumen1.png') }); await p.locator('.legv').scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(process.env.SHOTS, 'ap_resumen2.png') }); await p.click('#view .legv a.tap:has-text("Uso")'); await W(400); }
+    await p.click('#view .erow:has-text("AP-66") [data-e]'); await sheetOpen();
+    { const v = await p.locator('.sheet [name=importe]').inputValue(); ok(/^23,40?$/.test(v) && (await p.inputValue('.sheet [name=concepto]')).includes('AP-66'), 'tocar un apunte abre su ficha exacta (el peaje de 23,40 €): ' + v); }
+    await p.fill('.sheet [name=importe]', '24'); await save();
+    const d2 = await D(), uso = sum(d2.expenses.filter(e => e.fecha.startsWith(hoy.slice(0, 4)) && ['Combustible', 'Peajes', 'Área / camping', 'Ferry'].includes(e.cat)));
+    ok((await txt('.kpis .kpi >> nth=0')).includes(E2(uso)), 'tras corregirlo, la lista se recalcula al momento (' + E2(uso) + ')');
+    await p.evaluate(() => history.back()); await W(500);
+    ok(p.url().endsWith('#/stats') && (await txt('.legv a.tap:has-text("Uso")')).includes(E0(uso)), 'Atrás vuelve al Resumen, ya actualizado');
+    await p.click('#view .legv a.tap:has-text("Uso")'); await W(400);
+    await p.click('#view [data-back]'); await W(400);
+    ok(p.url().endsWith('#/stats'), '«Volver» también vuelve al Resumen');
+    // devolver el peaje a 23,40 para que el resto de la prueba siga igual
+    await go('#/gastos/gastos'); await p.click('#view .erow:has-text("AP-66") [data-e]'); await sheetOpen(); await p.fill('.sheet [name=importe]', '23,40'); await save();
+    // Borrar desde la lista de apuntes (papelera) y deshacer
+    await go('#/stats'); await p.click('#view .hbars a.hb.tap:has-text("Ferry")'); await W(400);
+    await p.click('#view .erow [data-dx]'); await W(300); await p.click('.ask [data-ok]'); await W(500);
+    ok(await p.locator('#view .erow').count() === 0 && (await txt('#view')).includes('No hay apuntes'), 'borrar el único apunte de la lista: «No hay apuntes»');
+    await p.click('#undo button'); await W(500);
+    ok(await p.locator('#view .erow').count() === 1, 'deshacer lo devuelve a la lista');
+  }
 
   // ---------- Cambios ----------
   // a) corrijo el peaje desde la lista del viaje

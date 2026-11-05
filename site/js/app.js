@@ -10,6 +10,7 @@ import * as viajes from './mods/viajes.js';
 import * as gastos from './mods/gastos.js';
 import * as ajustes from './mods/ajustes.js';
 import * as stats from './mods/stats.js';
+import * as apuntes from './mods/apuntes.js';
 import { quickAdd } from './forms.js';
 import { initBack, goMain } from './atras.js';
 
@@ -20,6 +21,7 @@ route('viaje', viajes.renderTrip);
 route('gastos', gastos.render);
 route('ajustes', ajustes.render);
 route('stats', stats.render);
+route('apuntes', apuntes.render);
 
 /* Navegación: arriba en escritorio, barra inferior en móvil */
 function nav(active) {
