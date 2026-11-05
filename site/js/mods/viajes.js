@@ -1,12 +1,13 @@
 // Viajes: lista y editor con mapa. Evolución de Rutahz, sin límite a Mallorca y con pernoctas.
 import { D, put, del, uid } from '../db.js';
-import { $, esc, icon, fKm, fDate, fDur, fEur, fNum, fPpl, rel, sheet, form, toast, undo, ask } from '../ui.js';
+import { $, esc, icon, fKm, fDate, fDur, fEur, fEur0, fNum, fPpl, rel, sheet, form, toast, undo, ask } from '../ui.js';
 import { onSubmit, normKey, normText, R } from '../valid.js';
 import { STOP_TIPOS, NIGHT, prefs, vehicle } from '../store.js';
 import { isoToday, haversine, consumption, lastFuelPrice, daysBetween, addMonths, currentKm, tripCost, eur100Of, tripDone, tripOpen, tripNights } from '../logic.js';
 import { expenseSheet, kmMsg, removeExpenses, askDeleteExpense } from '../forms.js';
 import { go, refresh } from '../router.js';
 import { search as geoSearch, reverse, parseCoords, timeout } from '../geo.js';
+import { PERFIL } from '../perfil.js';
 
 /* ---------- Lista ---------- */
 export function render(view, params) {
@@ -234,10 +235,14 @@ export function renderTrip(view, [id]) {
     const fEst = tc.fuelUsed ?? tc.fuelPlan;
     const fuelSub = fEst
       ? (tc.fuelUsed ? (tc.kmReal ? `consumido en ${fKm(tc.km)}` : 'consumido en la ruta') : 'previsto para la ruta')
-      : tc.fuelPaid ? 'pagado en ruta' : !tc.km ? 'añade paradas' : 'faltan dos llenos con km';
+      : tc.fuelPaid ? 'pagado en ruta' : !tc.km ? 'añade paradas' : '';
+    // Sin dos llenos con km todavía: estimación con el consumo típico de la Ducato (y el último precio, si lo hay)
+    const typ = !fEst && !tc.fuelPaid && tc.km ? tc.km * PERFIL.consumo / 100 : 0;
+    const typV = typ ? (price ? '≈ ' + fEur0(typ * price) : '≈ ' + fNum(typ, 0) + ' L') : '';
+    const typS = typ ? `${price ? fNum(typ, 0) + ' L · ' : ''}consumo típico (${fNum(PERFIL.consumo, 0)} L/100)` : '';
     $('#tot').innerHTML = `<div class="kpi"><span class="l">${icon('map')}Ruta</span><span class="v">${fKm(km)}</span><span class="s">${t.fuente === 'estimada' ? '≈ estimada sin conexión' : t.paradas.length > 1 ? 'por carretera' : 'añade paradas'}</span></div>
       <div class="kpi"><span class="l">${icon('clock')}Conducción</span><span class="v">${km ? fDur(t.durMin) : '—'}</span><span class="s">ritmo autocaravana ×${fNum(factor, 2)}</span></div>
-      <div class="kpi"><span class="l">${icon('fuel')}Gasóleo</span><span class="v">${fEst ? '≈ ' + fEur(fEst) : tc.fuelPaid ? fEur(tc.fuelPaid) : '—'}</span><span class="s">${fuelSub}</span></div>`;
+      <div class="kpi"><span class="l">${icon('fuel')}Gasóleo</span><span class="v">${fEst ? '≈ ' + fEur(fEst) : tc.fuelPaid ? fEur(tc.fuelPaid) : typV || '—'}</span><span class="s">${fuelSub || typS || 'faltan dos llenos con km'}</span></div>`;
     const h = +v.altura;
     $('#warn').innerHTML = t.paradas.length > 1 ? `<p class="fm warn" style="margin-top:12px">${icon('alert')} La ruta es la de un coche: no tiene en cuenta ${h ? `tu altura (${fNum(h, 2)} m)` : 'la altura'}, el peso ni calles estrechas. Revisa túneles, puertos y cascos urbanos antes de salir.</p>` : '';
   }

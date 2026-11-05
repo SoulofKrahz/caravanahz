@@ -610,3 +610,5 @@ a.kpi.tap::after{content:'›';position:absolute;right:12px;top:10px;font-size:c
 @media(hover:hover){a.kpi.tap:hover,.legv>a.tap:hover,.hbars>a.hb.tap:hover,.mini>a.tap:hover{background:var(--tint)}a.kpi.tap:hover{border-color:var(--em)}}
 @media(hover:none){a.kpi.tap:active,.legv>a.tap:active,.hbars>a.hb.tap:active,.mini>a.tap:active{background:var(--tint)}}
 .kpi .v.sm{font-size:calc(19px*var(--fs,1))}
+/* Cifras del viaje (ruta, conducción, gasóleo): en pantallas estrechas bajan de línea en vez de cortarse («1 h 27 …») */
+#tot .kpi .v{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.1}

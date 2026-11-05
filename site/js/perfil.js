@@ -14,6 +14,9 @@ export const PERFIL = {
   vehiculo: { marca: 'Fiat Ducato (serie 230)', base: '1.9 TD diésel', carroceria: 'Capuchina', anio: 1999 },
   // Sin datos fiables de fábrica no se rellenan medidas: dependen del carrocero (la célula) y no de Fiat
   ayudaMedidas: 'Mídelas tú: en una capuchina la altura suele rondar los 3 m, pero depende del carrocero y de lo que lleves en el techo.',
+  // Consumo típico de una Ducato 1.9 TD capuchina (propietarios: 10–12 L/100 km). Solo se usa para estimar el gasóleo
+  // de un viaje hasta que haya dos llenos con km; desde entonces manda el consumo real.
+  consumo: 11,
   ritmo: 1.3, // 82-92 CV con unos 3.000 kg: bastante más lenta que un turismo en puertos y autovía
   plan: [
     // nombre, zona, meses, km, fuente, nota
