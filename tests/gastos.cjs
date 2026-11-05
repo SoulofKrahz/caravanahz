@@ -260,6 +260,26 @@ async function run(browser, label, viewport, mobile, simple) {
   { const g = (await D()).expenses.find(e => e.cat === 'Impuestos y tasas' && +e.importe === 45.6);
     ok(!!g && !g.viajeId, 'renovar la ITV con importe: gasto en «Impuestos y tasas», fuera del viaje'); }
   await check('ITV renovada');
+  // i) coste de la «última vez» de una tarea (Editar tarea): va al historial y a Gastos
+  await go('#/mant'); await p.click('#seg [data-v="plan"]').catch(() => {}); await W(300);
+  await p.click('#view :is(button,a,[data-t]):has-text("Extintor")'); await sheetOpen();
+  await p.click('.sheet [data-e]'); await sheetOpen();
+  ok(await p.locator('.sheet [name=ultCoste]').count() === 1, 'Editar tarea: la «última vez» tiene campo de coste');
+  await p.fill('.sheet [name=ultFecha]', await dia(-40)); await p.fill('.sheet [name=ultCoste]', '45,90'); await save();
+  { const d = await D(), t = d.tasks.find(x => x.nombre === 'Extintor'), sv = d.services.find(x => x.tareaId === t.id);
+    const g = sv && d.expenses.find(e => e.id === sv.gastoId);
+    ok(!!sv && +sv.coste === 45.9 && g && g.cat === 'Mantenimiento' && +g.importe === 45.9 && !g.viajeId && t.ultFecha === sv.fecha, 'extintor: registro en su historial y gasto de 45,90 € en Mantenimiento (fuera del viaje)'); }
+  await check('extintor con coste');
+  // j) coste en «Completar plan»
+  await go('#/mant/completar');
+  const row = p.locator('#cl [data-id]:has-text("Manguitos")');
+  ok(await row.locator('[data-c]').count() === 1, 'Completar plan: cada tarea tiene casilla de coste');
+  await row.locator('[data-f]').fill(await dia(-30)); await row.locator('[data-c]').fill('1.234,50');
+  await p.click('#sv'); await W(600);
+  { const d = await D(), t = d.tasks.find(x => /Manguitos/.test(x.nombre)), sv = d.services.find(x => x.tareaId === t.id);
+    ok(!!sv && +sv.coste === 1234.5 && d.expenses.some(e => e.id === sv.gastoId && e.cat === 'Mantenimiento' && +e.importe === 1234.5) && t.ultFecha === sv.fecha, `manguitos: registro y gasto de 1.234,50 € desde Completar plan (${sv && sv.coste})`); }
+  await check('manguitos con coste');
+
   // h) el CSV suma lo mismo que la app
   await go('#/gastos/gastos');
   { const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#csv')]);

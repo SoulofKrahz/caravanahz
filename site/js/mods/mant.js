@@ -4,7 +4,7 @@ import { ctx, tasksWithStatus, ZONA_ICO, vehicle } from '../store.js';
 import { FUENTE_TXT } from '../perfil.js';
 import { normKey, parseNum } from '../valid.js';
 import { isoToday, currentKm } from '../logic.js';
-import { serviceSheet, taskSheet } from '../forms.js';
+import { serviceSheet, taskSheet, recordDone, kmMsg } from '../forms.js';
 import { go, refresh } from '../router.js';
 
 let tab = 'plan';
@@ -128,6 +128,7 @@ function completar(view) {
       <span style="display:flex;gap:8px;flex:1 1 260px;align-items:center">
         <input type="date" data-f max="${isoToday()}" ${v.fechaMat ? `min="${v.fechaMat}"` : ''} aria-label="Fecha" style="flex:1;min-width:0;padding:9px 10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);font-size:16px">
         ${+t.intKm ? `<input type="text" inputmode="numeric" autocomplete="off" data-k placeholder="km" aria-label="Kilómetros" style="width:100px;padding:9px 10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);font-size:16px">` : ''}
+        <input type="text" inputmode="decimal" autocomplete="off" data-c placeholder="€" aria-label="Coste en euros (opcional)" title="Coste (opcional)" style="width:78px;padding:9px 10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);font-size:16px">
         <button class="ib" data-del aria-label="Quitar del plan" title="No aplica: quitar del plan">${icon('trash')}</button></span></div>`).join('')}</div>
     <div class="brow" style="margin-top:14px">${ref ? `<button class="btn g" id="all">Rellenar las vacías con ${refTxt} (${fDate(ref)})</button>` : ''}<button class="btn" id="sv">${icon('check')}Guardar</button></div><div class="pb"></div>`;
 
@@ -147,13 +148,16 @@ function completar(view) {
     const todo = [], today = isoToday(); let bad = null;
     for (const r of view.querySelectorAll('[data-id]')) {
       const t = D.tasks.find(x => x.id === r.dataset.id); if (!t) continue;
-      const fi = r.querySelector('[data-f]'), ki = r.querySelector('[data-k]');
-      // Km escritos a la española («145.000») igual que en el resto de formularios
-      const f = fi.value, k = ki ? parseNum(ki.value, true) : '';
+      const fi = r.querySelector('[data-f]'), ki = r.querySelector('[data-k]'), ci = r.querySelector('[data-c]');
+      // Km escritos a la española («145.000») igual que en el resto de formularios; el coste, como un importe («1.234,50»)
+      const f = fi.value, k = ki ? parseNum(ki.value, true) : '', c = ci ? parseNum(ci.value, false, true) : '';
       let msg = '';
       if (fi.validity && fi.validity.badInput) msg = 'Fecha no válida';
       else if (Number.isNaN(k)) msg = 'Los km deben ser un número entero, p. ej. 145.000';
-      else if (!f && k === '') { rowErr(r, ''); continue; }
+      else if (Number.isNaN(c) || (c !== '' && (c < 0 || c > 100000 || Math.abs(c * 100 - Math.round(c * 100)) > 1e-6))) msg = 'El coste debe ser un importe, p. ej. 45,90';
+      else if (!f && k === '' && c === '') { rowErr(r, ''); continue; }
+      else if (c > 0 && !f) msg = 'Para apuntar el coste, indica la fecha';
+      else if (c > 0 && k !== '' && (msg = kmMsg(f, k, null) || '')) { /* km incompatibles con el resto de datos */ }
       else if (f && f > today) msg = 'La fecha no puede ser futura';
       else if (f && v.fechaMat && f < v.fechaMat) msg = 'Es anterior a la matriculación (' + fDate(v.fechaMat) + ')';
       else if (k !== '' && (!Number.isInteger(k) || k < 0)) msg = 'Los km deben ser un número entero';
@@ -164,12 +168,17 @@ function completar(view) {
       else if (+t.intKm && !+t.intMeses && k === '') msg = 'Va por km: faltan los km';
       rowErr(r, msg);
       if (msg) { bad = bad || r; continue; }
-      todo.push({ ...t, ultFecha: f, ultKm: k, manFecha: f, manKm: k });
+      todo.push({ t: { ...t, ultFecha: f, ultKm: k, manFecha: f, manKm: k }, coste: c > 0 ? c : 0 });
     }
     if (bad) { bad.scrollIntoView({ block: 'center', behavior: 'smooth' }); toast('Revisa las tareas marcadas en rojo'); return; }
     if (!todo.length) { toast('No has rellenado ninguna tarea'); return; }
-    for (const t of todo) await put('tasks', t);
-    toast(`${todo.length} ${todo.length === 1 ? 'tarea actualizada' : 'tareas actualizadas'}`);
+    let gastado = 0;
+    for (const { t, coste } of todo) {
+      await put('tasks', t);
+      // Con coste: registro en el historial de la tarea y gasto de Mantenimiento
+      if (coste) { await recordDone(t, { fecha: t.ultFecha, km: t.ultKm, coste }); gastado += coste; }
+    }
+    toast(`${todo.length} ${todo.length === 1 ? 'tarea actualizada' : 'tareas actualizadas'}${gastado ? ` · ${fEur(gastado)} apuntados en Gastos` : ''}`);
     go('mant');
   };
 }

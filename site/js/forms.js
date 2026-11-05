@@ -234,6 +234,23 @@ export async function syncTaskLast(taskId) {
   else await put('tasks', { ...t, ultFecha: t.manFecha ?? '', ultKm: t.manKm ?? '' });
 }
 
+/**
+ * «Se hizo tal día, con tantos km y costó tanto»: lo guarda como registro del historial de la tarea y, con coste,
+ * como gasto de Mantenimiento (en el viaje si la fecha cae en uno), igual que «Marcar como hecho».
+ * Lo usan «Editar tarea» (última vez) y «Completar plan».
+ */
+export async function recordDone(task, { fecha, km = '', coste = '', taller = '' }) {
+  const rec = { id: uid(), tareaId: task.id, nombre: task.nombre, zona: task.zona, fecha, km, coste: coste > 0 ? coste : '', taller };
+  if (coste > 0) {
+    const tr = tripOn(D.trips, fecha);
+    const g = await put('expenses', { fecha, cat: 'Mantenimiento', importe: coste, concepto: task.nombre + (taller ? ' · ' + taller : ''), km, servicioId: rec.id, viajeId: tr ? tr.id : '' });
+    rec.gastoId = g.id;
+  }
+  await put('services', rec);
+  await syncTaskLast(task.id);
+  return rec;
+}
+
 /* ---------- Tarea del plan ---------- */
 export function taskSheet(t = {}) {
   const isNew = !t.id;
@@ -247,24 +264,30 @@ export function taskSheet(t = {}) {
     { k: 'intMeses', l: 'Cada (meses)', t: 'number', step: 1, int: true, min: 0, max: 240, help: 'Vacío o 0 = sin límite de tiempo' },
     { k: 'intKm', l: 'Cada (km)', t: 'number', step: 500, int: true, min: 0, max: 500000, help: 'Vacío o 0 = sin límite de km' },
     ...(hasHist ? [] : [{ t: 'section', l: 'Última vez que se hizo' }, { k: 'ultFecha', l: 'Fecha', ...pastDate({ quick: false }) },
-      { k: 'ultKm', l: 'Kilómetros', t: 'number', step: 1, ...R.km, max: cur || KM_MAX, help: cur ? 'Como mucho ' + fKm(cur) + ' (los actuales)' : '' }]),
+      { k: 'ultKm', l: 'Kilómetros', t: 'number', step: 1, ...R.km, max: cur || KM_MAX, help: cur ? 'Como mucho ' + fKm(cur) + ' (los actuales)' : '' },
+      { k: 'ultCoste', l: 'Coste (€)', t: 'number', step: 0.01, min: 0, max: 100000, dec: 2, thou: true, help: 'Opcional. Si lo pones, se guarda en el historial de la tarea y en Gastos (Mantenimiento)' }]),
     { k: 'notas', adv: 1, l: 'Notas', t: 'textarea', ph: 'Referencia de pieza, tipo de aceite, intervalo del manual…', maxLen: 2000 },
   ];
   sheet({
     title: isNew ? 'Nueva tarea' : 'Editar tarea',
-    body: (hasHist ? '<p class="hint" style="margin-bottom:12px">La última vez se toma del historial de esta tarea.</p>' : '') + form(F, t),
+    body: (hasHist ? '<p class="hint" style="margin-bottom:12px">La última vez (fecha, km y coste) se toma del historial de esta tarea: para cambiarla, toca el registro en el historial.</p>' : '') + form(F, t),
     foot: actions('Guardar', isNew ? '' : 'Eliminar'),
     onMount: s => {
       onSubmit(s, F, v => {
         if (!(v.intMeses > 0) && !(v.intKm > 0)) return [{ k: 'intMeses', msg: 'Indica cada cuántos meses, cada cuántos km, o ambos' }];
         if (!hasHist && v.intKm > 0 && v.ultFecha && v.ultKm === '') return [{ k: 'ultKm', msg: 'Esta tarea va por km: indica los km de esa vez' }];
         if (!hasHist && v.intMeses > 0 && v.ultKm !== '' && !v.ultFecha) return [{ k: 'ultFecha', msg: 'Esta tarea va por tiempo: indica la fecha' }];
+        if (!hasHist && v.ultCoste > 0 && !v.ultFecha) return [{ k: 'ultFecha', msg: 'Para apuntar el coste, indica cuándo se hizo' }];
+        if (!hasHist && v.ultCoste > 0 && v.ultKm !== '') { const m = kmMsg(v.ultFecha, v.ultKm, null); if (m) return [{ k: 'ultKm', msg: m }]; }
         return [];
       }, async v => {
-        const rec = { ...t, ...v, intMeses: v.intMeses || 0, intKm: v.intKm || 0 };
+        const rec = { ...t, ...v, intMeses: v.intMeses || 0, intKm: v.intKm || 0 }, coste = v.ultCoste;
+        delete rec.ultCoste;
         if (!hasHist) { rec.manFecha = v.ultFecha; rec.manKm = v.ultKm; }
         await put('tasks', rec);
-        await s.close(); toast(isNew ? 'Tarea añadida' : 'Tarea actualizada'); refresh();
+        // Con coste, la «última vez» pasa a ser un registro del historial (y un gasto)
+        if (!hasHist && coste > 0 && v.ultFecha) await recordDone(rec, { fecha: v.ultFecha, km: v.ultKm, coste });
+        await s.close(); toast((isNew ? 'Tarea añadida' : 'Tarea actualizada') + (!hasHist && coste > 0 ? ` · ${fEur(coste)} apuntados en Gastos` : '')); refresh();
       });
       const d = s.el.querySelector('[data-del]');
       if (d) d.onclick = async () => {
