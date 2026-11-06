@@ -10,7 +10,7 @@
 const V = 'cz-2026-11-05-3';
 const EXT = 'cz-ext-1';
 // './' y no 'index.html': Cloudflare Pages redirige /index.html → / y una respuesta redirigida no sirve para abrir la página
-const SHELL = ['./', 'css/app.css', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/apple-touch-icon.png',
+const SHELL = ['./', 'css/app.css', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/apple-touch-icon.png', 'xmas.js',
   'js/app.js', 'js/db.js', 'js/logic.js', 'js/ui.js', 'js/store.js', 'js/router.js', 'js/forms.js', 'js/valid.js', 'js/perfil.js', 'js/theme.js', 'js/install.js', 'js/atras.js', 'js/geo.js',
   'js/mods/inicio.js', 'js/mods/mant.js', 'js/mods/viajes.js', 'js/mods/gastos.js', 'js/mods/combustible.js', 'js/mods/stats.js', 'js/mods/apuntes.js', 'js/mods/ajustes.js'];
 
