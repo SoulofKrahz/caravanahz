@@ -3,7 +3,7 @@ import { D, dump, restore, wipe, setKV, getKV, STORES, put, del } from '../db.js
 import { esc, icon, fKm, fDate, fNum, sheet, form, toast, download, ago, undo, ask, isSimple } from '../ui.js';
 import { vehicle, prefs, ctx, tasksWithStatus, docsWithStatus, VER, STOP_TIPOS, PREF_DEFAULTS, needsProfilePlan, applyProfilePlan } from '../store.js';
 import { ITV_CAT, PERFIL } from '../perfil.js';
-import { isApp, isIOS, canPrompt, installed, install } from '../install.js';
+import { isApp, isIOS, canPrompt, installed, install, forget } from '../install.js';
 import { isoToday, buildICS, currentKm } from '../logic.js';
 import { vehicleSheet } from '../forms.js';
 import { exportCSV } from './gastos.js';
@@ -164,8 +164,8 @@ function instalar() {
   if (isApp()) return set('Instalar la app', 'Ya la estás usando instalada. Se abre desde su icono y funciona sin conexión (salvo el mapa y las rutas).', '');
   if (canPrompt()) return set('Instalar la app', 'Ábrela como una app más: desde su icono, a pantalla completa y sin conexión.', `<div class="lrs">${lr('insb', 'dl', 'Instalar Caravanahz', 'Se añade a tu pantalla de inicio')}</div>`);
   if (isIOS()) return set('Instalar la app', 'En iPhone y iPad se instala desde el navegador:', `<ol class="steps"><li>Pulsa <b>Compartir</b> (el cuadrado con la flecha hacia arriba).</li><li>Elige <b>Añadir a pantalla de inicio</b>.</li><li>Abre Caravanahz desde el icono nuevo.</li></ol>`);
-  if (installed()) return set('Instalar la app', 'Ya está instalada en este dispositivo. Ábrela desde su icono para usarla a pantalla completa.', '');
-  return set('Instalar la app', 'Abre esta página con Chrome o Edge en el móvil y aparecerá la opción de instalar. Si no sale, busca «Instalar app» o «Añadir a pantalla de inicio» en el menú ⋮ del navegador.', '');
+  if (installed()) return set('Instalar la app', 'Parece que ya está instalada en este móvil: ábrela desde su icono para usarla a pantalla completa.', `<div class="lrs">${lr('insf', 'rf', 'Ya no la tengo instalada', 'Si la desinstalaste para volver a instalarla (por ejemplo, con otro color de icono)')}</div>`);
+  return set('Instalar la app', 'Si no sale el botón de instalar, Chrome a veces tarda en ofrecerlo tras desinstalar. Puedes hacerlo tú:', `<ol class="steps"><li>Toca el menú <b>⋮</b> de Chrome (arriba a la derecha).</li><li>Elige <b>Instalar app</b> o <b>Añadir a pantalla de inicio</b>.</li><li>Abre Caravanahz desde su icono nuevo.</li></ol><p class="hint">El icono sale con el color que tengas elegido en Apariencia.</p>`);
 }
 
 function avanzado(el) {
@@ -184,6 +184,7 @@ function avanzado(el) {
     const g = el.querySelector('#stg'); if (g) g.innerHTML = rows.map(([a, b]) => `<div class="row"><div><small>${a}</small><b style="white-space:normal">${esc(b)}</b></div></div>`).join('');
   })();
   const ib = el.querySelector('#insb'); if (ib) ib.onclick = async () => { await install(); avanzado(el); };
+  const fg = el.querySelector('#insf'); if (fg) fg.onclick = () => { forget(); avanzado(el); toast('Hecho. Si Chrome no ofrece instalarla, usa su menú ⋮ → «Instalar app»'); };
   el.querySelector('#rp').onclick = async () => {
     if (!(await ask({ title: '¿Volver a los ajustes iniciales?', text: 'Tema, color, tamaño de letra, avisos y rutas. Tus datos no se tocan.', ok: 'Sí, restablecer', cancel: 'No' }))) return;
     await setKV('prefs', {}); await savePrefs({ ...PREF_DEFAULTS, ah: undefined, as: undefined }); toast('Ajustes restablecidos'); avanzado(el);

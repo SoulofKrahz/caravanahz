@@ -45,6 +45,20 @@ export async function install() {
 }
 
 if (isApp()) set(K.inst, 1); // abierta como app: se recuerda (el almacenamiento se comparte con el navegador)
+
+/** La marca «instalada» se queda aunque desinstales la app (Chrome tarda en volver a ofrecer instalarla).
+ *  Donde Chrome lo permite, se le pregunta si de verdad sigue instalada y se corrige la marca. */
+export async function recheck() {
+  if (isApp() || !('getInstalledRelatedApps' in navigator)) return;
+  try {
+    const apps = await navigator.getInstalledRelatedApps();
+    const now = apps && apps.length ? 1 : 0;
+    if (now !== get(K.inst, 0)) { set(K.inst, now); changed(); }
+  } catch (e) {}
+}
+/** «Ya no la tengo instalada»: quita la marca a mano (y vuelve a ofrecer instalar) */
+export function forget() { set(K.inst, 0); set(K.snooze, 0); set(K.count, 0); changed(); }
+recheck();
 addEventListener('beforeinstallprompt', e => {
   if (isApp()) return;
   e.preventDefault(); ipr = e;

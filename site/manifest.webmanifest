@@ -65,5 +65,11 @@
   "categories": [
     "travel",
     "utilities"
+  ],
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://caravanahz.pages.dev/manifest.webmanifest"
+    }
   ]
 }

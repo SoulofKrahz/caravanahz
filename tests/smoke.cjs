@@ -386,6 +386,21 @@ async function run(browser, label, viewport, mobile) {
     await q.close();
   }
 
+  // 12) Desinstalada: la app no debe seguir creyendo que está instalada
+  for (const api of [true, false]) {
+    const q = await ctx.newPage(); q.on('pageerror', e => errs.push(e.message));
+    await q.addInitScript(api => { localStorage.setItem('cz_inst', '1'); if (api) navigator.getInstalledRelatedApps = async () => []; else delete Navigator.prototype.getInstalledRelatedApps; }, api);
+    await q.goto(BASE + '#/ajustes/avanzado'); await q.waitForTimeout(700);
+    const t = await q.innerText('#view');
+    if (api) ok(!t.includes('Parece que ya está instalada') && t.includes('Instalar app'), 'desinstalada (Chrome lo sabe): Ajustes ya no dice que está instalada y explica cómo instalarla');
+    else {
+      ok(t.includes('Ya no la tengo instalada'), 'desinstalada (Chrome no lo dice): Ajustes ofrece «Ya no la tengo instalada»');
+      await q.click('#insf'); await q.waitForTimeout(400);
+      ok(!(await q.innerText('#view')).includes('Parece que ya está instalada') && (await q.innerText('#view')).includes('Instalar app'), '«Ya no la tengo instalada» quita la marca y explica cómo instalarla');
+    }
+    await q.close();
+  }
+
   ok(!errs.length, 'sin errores de JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await ctx.close();
 }
