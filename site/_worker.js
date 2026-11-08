@@ -6,8 +6,9 @@
 const COLORS = ['turquesa', 'azul', 'indigo', 'violeta', 'rosa', 'coral', 'naranja', 'ambar', 'oliva', 'grafito'];
 
 async function manifest(req, url, env) {
-  const m = (req.headers.get('Cookie') || '').match(/(?:^|;\s*)cz_ic=([a-z]+)/);
-  const k = m && COLORS.includes(m[1]) ? m[1] : '';
+  // ?ic= lo pone la página al cambiar de color sin recargar; si no, manda la cookie
+  const q = url.searchParams.get('ic'), m = (req.headers.get('Cookie') || '').match(/(?:^|;\s*)cz_ic=([a-z]+)/);
+  const v = q != null ? q : m && m[1], k = COLORS.includes(v) ? v : '';
   const r = await env.ASSETS.fetch(new Request(new URL(k ? `/manifest-${k}.webmanifest` : '/manifest.webmanifest', url), req));
   const h = new Headers(r.headers);
   h.set('Content-Type', 'application/manifest+json');
